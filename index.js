@@ -1,761 +1,946 @@
-'use strict';
+"use strict";
 
-var main = (data, increase) => {
-	let tr = d3.select(".main")
-		.selectAll('.row')
-		.data(data, (d) => { return d.index })
-		.join('div')
-	tr.attr('class', 'row')
+const RESULTS_PER_PAGE = 50;
+const ACCENT_MARK = "\u0301";
 
-	let gf = (o, form) => { if (form in o) { return o[form] }; return ['—']; }  // get form
+let words = [];
+let filteredWords = [];
+let sortInfo = "freq";
+let curFilter = "";
+let searchTerm = "";
+let currentPage = 1;
 
-	let single_noun_table = (obj, d) => {
-		const word_data = [
-			['Nom.', gf(d, 'nom n')],
-			['Acc.', gf(d, 'acc n')],
-			['Gen.', gf(d, 'gen n')],
-			['Dat.', gf(d, 'dat n')],
-			['Ins.', gf(d, 'ins n')],
-			['Loc.', gf(d, 'loc n')],
-			['Voc.', gf(d, 'voc n')],
-		]
-		const table = obj.append('table')
-		for (let i=0; i < word_data.length; i++) {
-			const row = word_data[i]
-			const this_row = table.append('tr')
-			this_row.append('th')
-				.attr('id', 'leftLabel')
-				.text(row[0])
-			this_row.append('td')
-				.selectAll('p')
-				.data(row[1])
-				.join('p')
-				.text((d) => { return d })	
-		}
-	}
+const searchInput = document.getElementById("search");
+const sortSelect = document.getElementById("sort");
+const filterSelect = document.getElementById("filter");
+const resultCount = document.getElementById("resultCount");
+const dictionaryList = document.querySelector(".dictionary-list");
+const clearButton = document.getElementById("clear");
+const pasteButton = document.getElementById("paste");
 
-	let noun_table = (obj, d) => {
-		const word_data = [
-			['Nom.', gf(d, 'nom ns'), gf(d, 'nom np')],
-			['Acc.', gf(d, 'acc ns'), gf(d, 'acc np')],
-			['Gen.', gf(d, 'gen ns'), gf(d, 'gen np')],
-			['Dat.', gf(d, 'dat ns'), gf(d, 'dat np')],
-			['Ins.', gf(d, 'ins ns'), gf(d, 'ins np')],
-			['Loc.', gf(d, 'loc ns'), gf(d, 'loc np')],
-			['Voc.', gf(d, 'voc ns'), gf(d, 'voc np')],
-		]
-		const table = obj.append('table')
-		const header_row = table.append('tr')  // header row
-		header_row.append('th')
-			.attr('id', 'leftLabel')
-		header_row.append('th')
-			.text('Sing.')
-		header_row.append('th')
-			.text('Plur.')
-		for (let i=0; i < word_data.length; i++) {
-			const row = word_data[i]
-			const this_row = table.append('tr')
-			this_row.append('th')
-				.attr('id', 'leftLabel')
-				.text(row[0])
-			this_row.selectAll('td')
-				.data(row.slice(1))
-				.join('td')
-				.selectAll('p')
-				.data((d) => { return d })
-				.join('p')
-				.text((d) => { return d })	
-		};
-	}
+const debounce = (fn, delay = 250) => {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  };
+};
 
-	let adjective_table = (obj, d) => {
-		const word_data = [
-			['Nom.', gf(d, 'nom am'), gf(d, 'nom an'), gf(d, 'nom af'), gf(d, 'nom ap')],
-			['Anim. Acc.', gf(d, 'gen am'), gf(d, 'nom an'), gf(d, 'acc af'), gf(d, 'gen ap')],
-			['Inan. Acc.', gf(d, 'nom am'), gf(d, 'nom an'), gf(d, 'acc af'), gf(d, 'nom ap')],
-			['Gen.', gf(d, 'gen am'), gf(d, 'gen an'), gf(d, 'gen af'), gf(d, 'gen ap')],
-			['Dat.', gf(d, 'dat am'), gf(d, 'dat an'), gf(d, 'dat af'), gf(d, 'dat ap')],
-			['Ins.', gf(d, 'ins am'), gf(d, 'ins an'), gf(d, 'ins af'), gf(d, 'ins ap')],
-			['Loc.', gf(d, 'loc am'), gf(d, 'loc an'), gf(d, 'loc af'), gf(d, 'loc ap')],
-		]
+const normalizeText = (text = "") => {
+  return text
+    .toString()
+    .toLowerCase()
+    .replaceAll(ACCENT_MARK, "")
+    .replaceAll("ї", "і")
+    .replaceAll("ґ", "г")
+    .replaceAll(/[“”«»„]/g, '"')
+    .replaceAll(/[‘’‚‛‹›]/g, "'")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9а-яєіїґ'\s-]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
 
-		const table = obj.append('table')
-		const header_row = table.append('tr')  // header row
-		header_row.append('th')
-			.attr('id', 'leftLabel')
-		header_row.append('th')
-			.text('Male')
-		header_row.append('th')
-			.text('Neut.')
-		header_row.append('th')
-			.text('Fem.')
-		header_row.append('th')
-			.text('Plur.')
-		for (let i=0; i < word_data.length; i++) {
-			const row = word_data[i]
-			const this_row = table.append('tr')
-			this_row.append('th')
-				.attr('id', 'leftLabel')
-				.text(row[0])
-			this_row.selectAll('td')
-				.data(row.slice(1))
-				.join('td')
-				.selectAll('p')
-				.data((d) => { return d })
-				.join('p')
-				.text((d) => { return d })	
-		};
+const buildWiktionaryUrl = (word = "") => {
+  const normalizedWord = word.toString().replaceAll(ACCENT_MARK, "").trim();
+  return `https://en.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}#Ukrainian`;
+};
 
-		if ('addl' in d) {
-			/* Active, passive, adverbial, impersonal */
+const buildWiktionaryLink = (
+  word = "",
+  text = "View on Wiktionary",
+  className = "wiktionary-link",
+) => {
+  const link = document.createElement("a");
+  link.className = className;
+  link.href = buildWiktionaryUrl(word);
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.textContent = text;
+  return link;
+};
 
-			let addls = []
-			for (const addl of ['comp', 'super', 'arg', 'adv']) {
-				if (addl in d['addl']) { addls.push(addl) }
-			}
-			
-			for (const addl of addls) {
-				const addl_tr = table.append('tr')
-				addl_tr.append('th')
-					.attr('id', 'leftLabel')
-					.text({
-						'comp': 'Comp.',
-						'super': 'Super.',
-						'arg': 'Arg.',
-						'adv': 'Adv.'
-					}[addl])
-				addl_tr.append('td')
-					.attr('colspan', 4)
-					.selectAll()
-					.data(gf(d['addl'], addl))
-					.join('p')
-					.text((d) => { return d; })
-			}
-		}
-	}
+const extractText = (value) => {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(extractText).join(" ");
+  if (value && typeof value === "object")
+    return Object.values(value).map(extractText).join(" ");
+  return "";
+};
 
-	let verb_table = (obj, d) => {
-		/* obj.append('p').text(JSON.stringify(d)) */
-		let tenses = []
-		for (const tense of ['past', 'pres', 'fut', 'imp']) {
-			if (tense in d) { tenses.push(tense)}
-		}
-		const table = obj.append('table')
-		const inf_tr = table.append('tr')
-		inf_tr.append('th')
-			.attr('id', 'leftLabel')
-			.text('Inf.')
-		inf_tr.append('td')
-			.attr('colspan', 6)
-			.selectAll()
-			.data(gf(d, 'inf'))
-			.join('p')
-			.text((d) => { return d });
+const buildIndex = (entry) => {
+  return {
+    ...entry,
+    normalizedWord: normalizeText(entry.word),
+    normalizedDefs: normalizeText(entry.defs?.join(" ") ?? ""),
+    normalizedForms: normalizeText(extractText(entry.forms)),
+  };
+};
 
-		for (const tense of tenses) {
-			const tense_label = {
-				'past': 'Past',
-				'pres': 'Pres.',
-				'fut': 'Fut.',
-				'imp': 'Imp.'
-			}[tense]
-			const tense_categories = 
-				(tense === 'past') 
-				? ['m', 'n', 'f']
-				: (tense === 'imp')
-				? ['1', '2']
-				: ['1', '2', '3']
-			const tense_label_width = tense === 'imp' ? 3 : 2
-			const tense_label_tr = table.append('tr')
-			tense_label_tr.append('th')
-				.attr('id', 'tenseMarker')
-				.text(tense_label)
-			tense_label_tr.selectAll()
-				.data(tense_categories)
-				.join('th')
-				.attr('colspan', tense_label_width)
-				.attr('id', 'tenseHeader')
-				.text((d) => { 
-					return {
-						'm': 'Male',
-						'n': 'Neuter',
-						'f': 'Fem.',
-						'1': '1st',
-						'2': '2nd',
-						'3': '3rd'
-					}[d]
-				})
-			for (const number of ['s', 'p']) {
-				const number_label_tr = table.append('tr')
-				const number_label = number === 's' ? 'Sing.' : 'Plur.'
-				number_label_tr.append('th')
-					.attr('id', 'leftLabel')
-					.text(number_label)
-				if (tense === 'past' && number === 'p') {
-					number_label_tr.append('td')
-						.attr('colspan', 6)
-						.selectAll()
-						.data(gf(d['past'], 'p'))
-						.join('p')
-						.text((d) => { return d; })
-				}
-				else {
-					number_label_tr.selectAll()
-						.data(tense_categories)
-						.join('td')
-						.attr('colspan', tense_label_width)
-						.selectAll()
-						.data((tc) => {
-							const form = `${tc}${number}`
-							return gf(d[tense], form)
-						})
-						.join('p')
-						.text((d) => { return d; })
-				}
-						
-			}
+const humanizeKey = (key) => {
+  const alias = {
+    addl: "Additional forms",
+    comp: "Comparative",
+    super: "Superlative",
+    arg: "Argumentative",
+    adv: "Adv. Part.",
+    imp: "Imp. Part.",
+    act: "Act. Part.",
+    pas: "Pass. Part.",
+    m: "Male",
+    n: "Neuter",
+    f: "Female",
+    s: "Sing.",
+    p: "Plur.",
+  };
+  if (alias[key]) return alias[key];
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .replace(/\s+/g, " ");
+};
 
-			if ('pp' in d[tense]) {
-				/* Active, passive, adverbial, impersonal */
+const renderStressText = (text) => {
+  const fragment = document.createDocumentFragment();
+  let buffer = "";
 
-				let pps = []
-				for (const pp of ['act', 'pas', 'adv', 'imp']) {
-					if (pp in d[tense]['pp']) { pps.push(pp) }
-				}
-				
-				for (const pp of pps) {
-					const participle_tr = table.append('tr')
-					participle_tr.append('th')
-						.attr('id', 'leftLabel')
-						.text({
-							'act': 'Act. Part.',
-							'pas': 'Pass. Part.',
-							'adv': 'Adv. Part.',
-							'imp': 'Imp. Part.'
-						}[pp])
-					participle_tr.append('td')
-						.attr('colspan', 6)
-						.attr('id', 'ppLabel')
-						.selectAll()
-						.data(gf(d[tense]['pp'], pp))
-						.join('p')
-						.text((d) => { return d; })
-				}
-			}
-
-		}
-	}
-	const div = tr.selectAll('div')
-		.data((d) => { 
-			return [
-			d, d.forms
-		]; })
-		.enter()
-			.append('div')
-	div.attr('class', 'col')
-	div.exit()
-		.remove()
-	div.each(function(d, i) {
-			let this_obj = d3.select(this)
-				.attr('id', 'def')
-			if (i === 0) {
-				this_obj.append('p')
-					.attr('class', 'title')
-					.append('b')
-					.text(d.word)
-				this_obj.append('p')
-					.attr('class', 'title')
-					.text(d.info ? ` (${d.pos} - ${d.info})` : ` (${d.pos})`)
-				this_obj.append('div')
-					.append('ul')
-					.selectAll()
-					.data(d.defs)
-					.join('li')
-					.text((d) => { return d;});
-			} else if (i === 1) {
-				this_obj.attr('id', 'forms')
-				if ('nom n' in d || 'acc n' in d) {
-					single_noun_table(this_obj, d)
-				}
-				else if ('nom ns' in d || 'nom np' in d) {
-					noun_table(this_obj, d)
-				}
-				else if ('nom am' in d || 'nom af' in d || 'nom an' in d || 'nom ap' in d) {
-					adjective_table(this_obj, d)
-				}
-				else if ('inf' in d) {
-					verb_table(this_obj, d)
-				}
-				else if (Object.keys(d).length > 0) { 
-					this_obj.text(JSON.stringify(d)) 
-				}
-				else {
-					this_obj.append('p')
-						.attr('id', 'indcl')
-						.append('i')
-						.text('indeclinable')
-						
-				}
-			}
-		});
-
-	const highlightFunc = (t) => {
-
-		const find = (word, phrase, literal, mustPreceed) => {
-			console.log(word, phrase)
-			const letters = 'abcdefghijklmnopqrstuvwxyzабвгдежзийклмнопрстуфхцчшщъыьэюяєії'
-			let index = 0;
-			let parenthesis = 0;
-			let result = ''
-			let buffer = ''
-			for (let i = 0; i < phrase.length; i++) {
-				const thisLetter = phrase[i];
-
-				if (thisLetter === ')') { parenthesis++; };
-				if (thisLetter === '(') { parenthesis--; };
-
-				const isBeginning = i === 0;
-				const isEnd = i === phrase.length - 1;
-				const beforeClear = isBeginning || !letters.includes(phrase[i - 1].toLowerCase());
-				const afterClear = isEnd || !letters.includes(phrase[i + 1].toLowerCase());
-
-				const isWordMatch = thisLetter.toLowerCase().replaceAll('ї', 'і').replaceAll('ґ', 'г') === word[index];
-				const isAccent = thisLetter === "́";
-			
-				if (index === 0) {
-					if (((!literal && !mustPreceed) || beforeClear) && isWordMatch && parenthesis === 0) {
-						buffer += thisLetter;
-						index ++;
-
-						if (index === word.length) {
-							if (!literal || afterClear) result += `<span class=highlight>${buffer}</span>`;
-							else result += buffer;
-							buffer = '';
-							index = 0;
-						}
-					}
-					else result += thisLetter;
-				}
-				else if (isWordMatch || isAccent) {
-					buffer += thisLetter;
-					if (!isAccent || (isAccent && isWordMatch)) index ++;
-					if (index === word.length && (isEnd || phrase[i + 1] !== "́")) {
-						if (!literal || afterClear) result += `<span class=highlight>${buffer}</span>`;
-						else result += buffer;
-						buffer = '';
-						index = 0;
-					}
-				} else {
-					result += buffer;
-					buffer = '';
-					index = 0;
-					result += thisLetter;
-				}
-			}
-			result += buffer;
-			return result
-		}
-		if (literalPhrases || fuzzyWords) {
-			let ret_val = t
-			const mustPreceed = !(fuzzyWords.length === 1 && fuzzyWords[0].replace(/[^a-z]/g, '').length === 0);
-			for (const phrase of literalPhrases) {
-				ret_val = find(phrase, ret_val, true, null)
-			}
-			for (const word of fuzzyWords) {
-				ret_val = find(word, ret_val, false, mustPreceed)
-			}
-			return ret_val; 
-		}
-		return t;
-	}
-	d3.selectAll('li')
-		.html(function() { return highlightFunc(this.__data__) })
-	d3.selectAll('td')
-		.selectAll('p')
-		.html(function() { return highlightFunc(this.__data__) })
-	d3.selectAll('p.title > b')
-		.html(function() { return highlightFunc(this.__data__.word) })
-
-	if (!increase) { window.scrollTo({top:0}); }
-}
-
-let numDisplayed = 300
-let data;
-let freq_data;
-let alpha_data;
-let curFilter;
-let sortInfo = 'freq';
-let index = new Object();
-let wordDict = new Object();
-let searchTerm;
-let literalPhrases;
-let fuzzyWords;
-
-document.addEventListener('copy', (event) => {
-	if (!document.querySelector('#stressCopy').checked) {
-		const selection = document.getSelection()
-		event.clipboardData.setData('text/plain', selection.toString().replaceAll('\u0301', ''))
-		event.preventDefault()
-	}
-})
-
-Promise.all([
-
-	fetch('index.json')
-		.then(res => res.json() )
-		.then(out => { 
-			console.log('starting index.json')
-			for (const o of Object.keys(out)) index[o] = {'word': out[o][0], 'indexes': new Set(out[o][1])};
-			console.log('done with index.json') 
-		})
-		.catch(err => {throw err; }),
-
-	fetch('word_dict.json')
-		.then(res => res.json() )
-		.then(out => { 
-			console.log('starting word_dict.json')
-			for (const o of Object.keys(out)) wordDict[o] = new Set(out[o]); 
-			console.log('done with word_dict.json')
-		})
-		.catch(err => {throw err; }),
-
-	fetch('words.json')
-		.then(res => res.json())
-		.then(out => {
-			data = out;
-			freq_data = data;
-			main(data.slice(0, numDisplayed))
-			alpha_data = d3.sort(
-				[...data], 
-				x => x.word.toLowerCase()
-					.replaceAll('\u0301', '')
-					.split('')
-					.map((y) => {
-						const letters = Object({
-							'а': '0',
-							'б': '1',
-							'в': '2',
-							'г': '3',
-							'ґ': '4',
-							'д': '5',
-							'е': '6',
-							'є': '7',
-							'ж': '8',
-							'з': '9',
-							'и': ':',
-							'і': ';',
-							'ї': '<',
-							'й': '?',
-							'к': '@',
-							'л': 'A',
-							'м': 'B',
-							'н': 'C',
-							'о': 'D',
-							'п': 'E',
-							'р': 'F',
-							'с': 'G',
-							'т': 'H',
-							'у': 'I',
-							'ф': 'K',
-							'х': 'L',
-							'ц': 'M',
-							'ч': 'N',
-							'ш': 'O',
-							'щ': 'P',
-							'ь': 'Q',
-							'ю': 'R',
-							'я': 'S',
-							"'": 'T'
-						})
-						if (y in letters) return letters[y]
-						return ''
-					})
-					.join()
-			)
-		})
-		.catch(err => {throw err}),
-]).then( () => { 
-	readURL(window.location.href);
-	setURL(true);
-}).catch(err => {throw err})
-
-window.onscroll = (_) => {
-	if (window.innerHeight + window.scrollY + 1000 >= document.body.offsetHeight) {
-		numDisplayed += 100
-		main(data.slice(0, numDisplayed), true);
-	}
-}
-
-document.querySelector('input#search').addEventListener("keydown", event => {
-	if (event.code === "Enter") { search(); };
-})
-
-window.addEventListener("keydown", event => {
-    if (event.code === 'F3' || (event.ctrlKey && event.code === 'KeyF')) { 
-        event.preventDefault();
-		document.querySelector('input#search').focus();
+  for (const char of text) {
+    if (char === ACCENT_MARK) {
+      if (!buffer) continue;
+      const lastChar = buffer.slice(-1);
+      const prefix = buffer.slice(0, -1);
+      if (prefix) fragment.appendChild(document.createTextNode(prefix));
+      const stressSpan = document.createElement("span");
+      stressSpan.className = "stress";
+      stressSpan.textContent = lastChar;
+      fragment.appendChild(stressSpan);
+      buffer = "";
+      continue;
     }
-	if (event.code === 'Escape') {
-		clear();
-	}
-})
+    buffer += char;
+  }
 
-function selectHelper() {
-	if (sortInfo === 'freq') { data = freq_data }; 
-	if (sortInfo === 'alpha') { data = alpha_data }; 
-	if (sortInfo === 'alpha_rev') { data = d3.reverse(alpha_data) };
-	numDisplayed = 300;
-}
+  if (buffer) fragment.appendChild(document.createTextNode(buffer));
+  return fragment;
+};
 
-function filterHelper() {
-	if (curFilter) {
-		data = d3.filter(data, x => x.pos === curFilter);
-		numDisplayed = 100;
-	}
-}
+const normalizeCharForHighlight = (char) => {
+  const smartQuoteMap = {
+    "“": '"',
+    "”": '"',
+    "«": '"',
+    "»": '"',
+    "„": '"',
+    "‘": "'",
+    "’": "'",
+    "‚": "'",
+    "‛": "'",
+    "‹": "'",
+    "›": "'",
+  };
+  if (char === ACCENT_MARK) return null;
+  if (smartQuoteMap[char]) return smartQuoteMap[char];
+  const lower = char.toLowerCase();
+  if (lower === "ї") return "і";
+  if (lower === "ґ") return "г";
+  if (/[a-z0-9а-яєіїґ]/i.test(lower)) return lower;
+  if (/['\s-]/.test(lower)) return lower;
+  return " ";
+};
 
-function searchHelper() {
-	literalPhrases = null
-	fuzzyWords = null
-	if (index && wordDict && searchTerm) {
-		searchTerm = searchTerm.trim().replaceAll(/\s+/g, ' ').toLowerCase()
-		const literalResults = searchTerm.matchAll(/"([^"]*)"/g)
-		literalPhrases = Array()
-		let literalWords = Array()
-		for (let literalRes of literalResults) {
-			literalPhrases.push(literalRes[1])
-			literalWords = literalWords.concat(literalRes[1].split(' '));
-		}
-		const fuzzyResults = searchTerm.replaceAll(/"([^"]*)"/g, '').trim().replaceAll(/\s+/g, ' ')
-		fuzzyWords = Array()
-		for (let fuzzyRes of fuzzyResults.split(' ')) {
-			fuzzyWords.push(fuzzyRes);
-		}
-		let indexes;
-		const canInclude = fuzzyWords.length === 1 && fuzzyWords[0].replace(/[^a-z]/g, '').length === 0;
-		for (let word of fuzzyWords) {
-			if (!word) break;
-			// generate words containing all searched letters
-			let wordIndexes;
-			word = word.replaceAll('ї', 'і').replaceAll('ґ', 'г')
-			for (const l of new Set(word)) {
-				if (!wordIndexes) wordIndexes = wordDict[l];
-				else {
-					let _wordIndexes = new Set();
-					for (const elem of wordDict[l]) { wordIndexes.has(elem) ? _wordIndexes.add(elem) : null }
-					wordIndexes = _wordIndexes;
-				}
-			}
-			if (!indexes) {
-				let results = d3.filter(Array.from(wordIndexes), x => {
-					const thisWord = index[x]['word']
-					return canInclude ? thisWord.includes(word) : (thisWord.startsWith(word) || thisWord === word)
-				});
-				indexes = new Set()
-				for (const res of results) { for (const elem of index[res]['indexes']) indexes.add(elem); }
-			} else {
-				let results = d3.filter(Array.from(wordIndexes), x => {
-					const thisWord = index[x]['word']
-					return canInclude ? thisWord.includes(word) : (thisWord.startsWith(word) || thisWord === word)
-				});
-				let _indexes = new Set()
-				for (const res of results) { 
-					for (const elem of index[res]['indexes']) indexes.has(elem) ? _indexes.add(elem) : null; 
-				}
-				indexes = _indexes;
-			}
-		}
-		console.log(literalWords)
-		for (let word of literalWords) {
-			if (!word) break;
-			// generate words containing all searched letters
-			word = word.replaceAll('ї', 'і').replaceAll('ґ', 'г')
-			let wordIndexes;
-			for (const l of new Set(word)) {
-				if (!wordIndexes) wordIndexes = wordDict[l];
-				else {
-					let _wordIndexes = new Set();
-					for (const elem of wordDict[l]) { wordIndexes.has(elem) ? _wordIndexes.add(elem) : null }
-					wordIndexes = _wordIndexes;
-				}
-			}
-			if (!indexes) {
-				let results = d3.filter(Array.from(wordIndexes), x => {
-					const thisWord = index[x]['word']
-					return thisWord === word
-				});
-				indexes = new Set()
-				for (const res of results) { for (const elem of index[res]['indexes']) indexes.add(elem); }
-			} else {
-				let results = d3.filter(Array.from(wordIndexes), x => {
-					const thisWord = index[x]['word']
-					return thisWord === word
-				});
-				let _indexes = new Set()
-				for (const res of results) { 
-					for (const elem of index[res]['indexes']) indexes.has(elem) ? _indexes.add(elem) : null; 
-				}
-				indexes = _indexes;
-			}
-		}
-		// ensure actual phrase is included
-		for (const literalRes of literalPhrases) {
-			let allData = d3.filter(data, x => indexes.has(x.index))
+const renderHighlightText = (text, query) => {
+  if (typeof text !== "string") return document.createTextNode(text ?? "");
+  const normalizedQuery = normalizeText(query || "");
+  if (!normalizedQuery) {
+    return renderStressText(text);
+  }
 
-			const filterFunc = (y) => {
-				let noParen = ''
-				let paren = 0
-				for (const l of y) {
-					if (l === '(') paren++;
-					else if (l === ')') paren--;
-					else if (paren === 0) noParen += l;
-				}
-				return noParen.toLowerCase().replace('ї', 'і').replace('ґ', 'г').includes(literalRes)
-			} 
+  const segments = [];
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (char === ACCENT_MARK) continue;
+    let original = char;
+    if (i + 1 < text.length && text[i + 1] === ACCENT_MARK) {
+      original = char + text[i + 1];
+      i += 1;
+    }
+    const norm = normalizeCharForHighlight(char);
+    segments.push({ original, norm });
+  }
 
-			const unpack = (y) => {
-				let result = []
-				if (typeof y === 'object' && y !== null) {
-					for (const x of Object.values(y)) result = result.concat(unpack(x));
-				}
-				else {
-					result = y;
-				}
-				return result;
-			}
+  const normalizedText = segments
+    .map((segment) => segment.norm || " ")
+    .join("");
+  const ranges = [];
+  let index = 0;
+  while (index < normalizedText.length) {
+    const found = normalizedText.indexOf(normalizedQuery, index);
+    if (found === -1) break;
+    ranges.push([found, found + normalizedQuery.length]);
+    index = found + Math.max(1, normalizedQuery.length);
+  }
 
-			let goodData = d3.filter(
-				allData,
-				x => (
-					d3.filter(x.defs, filterFunc) + d3.filter(unpack(x.forms), y => { return y.replaceAll('\u0301', '').replaceAll('ї', 'і').replaceAll('ґ', 'г') === literalRes; } )
-				).length > 0 || x.word.replaceAll('\u0301', '').replaceAll('ї', 'і').replaceAll('ґ', 'г') === literalRes
-			).map(x => x.index)
-			
-			const _indexes = d3.filter(Array.from(indexes), x => goodData.includes(x))
-			indexes = new Set();
-			for (const elem of _indexes) { indexes.add(elem); }
-		}
-		if (indexes) {
-			numDisplayed = 300;
-			data = d3.filter(data, x => indexes.has(x.index))
-		}
-	}
-}
-function select() {
-	sortInfo = document.querySelector('select#sort').value;
-	selectHelper();
-	filterHelper();
-	search(false);
-	main(data.slice(0, numDisplayed));
-	setURL()
-}
+  if (!ranges.length) {
+    return renderStressText(text);
+  }
 
-function filter() {
-	curFilter = document.querySelector('select#filter').value;
-	selectHelper();
-	filterHelper();
-	search(false);
-	main(data.slice(0, numDisplayed));
-	setURL()
-}
+  const mergedRanges = [];
+  for (const range of ranges) {
+    if (
+      !mergedRanges.length ||
+      range[0] > mergedRanges[mergedRanges.length - 1][1]
+    ) {
+      mergedRanges.push(range);
+    } else {
+      mergedRanges[mergedRanges.length - 1][1] = Math.max(
+        mergedRanges[mergedRanges.length - 1][1],
+        range[1],
+      );
+    }
+  }
 
-function search(changeURL = true) {
-	const letters = "abcdefghijklmnopqrstuvwxyzабвгдежзийклмнопрстуфхцчшщъыьэюяєіїґ '\""
-	const oldSearch = searchTerm;
-	searchTerm = document.querySelector('input#search').value.toLowerCase();
-	searchTerm = searchTerm.replaceAll('“', '"').replaceAll('”', '"').replaceAll('«', '"').replaceAll('»', '"')
-	searchTerm = searchTerm.replaceAll('‘', "'").replaceAll('’', "'").replaceAll('‛', "'")
-	searchTerm = searchTerm.replaceAll('ї', 'і').replaceAll('ґ', 'г')  // letter normalization
-	let newSearchTerm = ''
-	for (const s of searchTerm) { if (letters.includes(s)) newSearchTerm += s; }
-	searchTerm = newSearchTerm;
-	if (oldSearch) {
-		selectHelper();
-		filterHelper();
-	}
-	searchHelper();
-	main(data.slice(0, numDisplayed))
-	if (changeURL) setURL();
-}
+  const fragment = document.createDocumentFragment();
+  let nextSegment = 0;
+  mergedRanges.forEach(([start, end]) => {
+    while (nextSegment < start) {
+      fragment.appendChild(renderStressText(segments[nextSegment].original));
+      nextSegment += 1;
+    }
+    const highlight = document.createElement("mark");
+    highlight.className = "match";
+    for (let i = start; i < end; i += 1) {
+      highlight.appendChild(renderStressText(segments[i].original));
+    }
+    fragment.appendChild(highlight);
+    nextSegment = end;
+  });
 
-function setURL(replace = false) {
-	let urlSearchTerm = document.querySelector('input#search').value;
-	let urlFilterTerm = document.querySelector('select#filter').value;
-	let urlSortTerm = document.querySelector('select#sort').value;
-	let url = window.location.href;
-	url = url.split(/[#\?\&]/).reverse();
-	let base = url.pop();
-	let addedParam = false
-	base += '#search'
-	if (urlSearchTerm) {
-		base += '?q=' + urlSearchTerm;
-	}
-	if (urlFilterTerm) {
-		const startChar = addedParam ? '&' : '?';
-		base += startChar + 'f=' + urlFilterTerm;
-		addedParam = true
-	}
-	if (urlSortTerm) {
-		const startChar = addedParam ? '&' : '?';
-		base += startChar + 's=' + urlSortTerm;
-	}
-	if (replace) { window.history.replaceState("", "", base); }
-	else { window.history.pushState("", "", base); }
-}
+  while (nextSegment < segments.length) {
+    fragment.appendChild(renderStressText(segments[nextSegment].original));
+    nextSegment += 1;
+  }
 
-function readURL(urlRaw) {
-	console.log('reading URL')
-	console.log(window.location.href)
-	let url = urlRaw.split(/[#\?\&]/).reverse();
-	url.pop();  // base, not used
-	let params = [];
-	while (url.length > 0) {
-		params.push(url.pop().split(/=/));
-	}
-	let defaults = {
-		's': 'freq',
-		'f': '',
-		'q': ''
-	}
-	let found = {
-		's': false,
-		'f': false,
-		'q': false
-	}
-	let funcs = {
-		's': 'select#sort',
-		'f': 'select#filter',
-		'q': 'input#search'
-	}
-	for (let [var_, val_] of params) {
-		if (var_ in funcs) {
-				document.querySelector(funcs[var_]).value = decodeURI(val_);
-				found[var_] = true
-		}
-	}
-	for (const i of Object.keys(found)) {
-		if (!found[i]) {
-			document.querySelector(funcs[i]).value = defaults[i]
-		}
-	}
-	sortInfo = document.querySelector('select#sort').value;
-	curFilter = document.querySelector('select#filter').value;
-	selectHelper();
-	filterHelper();
-	search(false);
-}
+  return fragment;
+};
 
-function clear() {
-	document.querySelector('input#search').value = ""
-	search();
-}
+const renderText = (text) => renderHighlightText(text, searchTerm);
 
-d3.select('#clear').on('click', clear)
+const createListHeader = () => {
+  const header = document.createElement("div");
+  header.className = "list-header";
+  const wordLabel = document.createElement("span");
+  wordLabel.className = "list-column list-column--word";
+  wordLabel.textContent = "Word";
+  const formsLabel = document.createElement("span");
+  formsLabel.className = "list-column list-column--forms";
+  formsLabel.textContent = "Forms / Declensions";
+  header.appendChild(wordLabel);
+  header.appendChild(formsLabel);
+  return header;
+};
 
-window.onpopstate = (event) => {
-	
-	if (event) {
-		console.log(event.srcElement.location.href)
-		readURL(event.srcElement.location.href);
-	}
-}
+const createFormValue = (value) => {
+  if (Array.isArray(value)) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "form-values";
+    value.forEach((item) => {
+      const itemLine = document.createElement("p");
+      itemLine.appendChild(renderText(item));
+      wrapper.appendChild(itemLine);
+    });
+    return wrapper;
+  }
+
+  if (value && typeof value === "object") {
+    const wrapper = document.createElement("div");
+    wrapper.className = "form-nested";
+    Object.entries(value).forEach(([subKey, subValue]) => {
+      const row = document.createElement("div");
+      row.className = "form-row";
+      const label = document.createElement("span");
+      label.className = "form-label-inline";
+      label.textContent = humanizeKey(subKey);
+      row.appendChild(label);
+      row.appendChild(createFormValue(subValue));
+      wrapper.appendChild(row);
+    });
+    return wrapper;
+  }
+
+  const paragraph = document.createElement("p");
+  paragraph.appendChild(renderText(value ?? ""));
+  return paragraph;
+};
+
+const appendFormattedText = (container, value) => {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      container.appendChild(renderText(item));
+      if (index < value.length - 1)
+        container.appendChild(document.createElement("br"));
+    });
+    return;
+  }
+  container.appendChild(renderText(value ?? ""));
+};
+
+const caseLabels = {
+  nom: "Nom.",
+  acc: "Acc.",
+  gen: "Gen.",
+  dat: "Dat.",
+  ins: "Ins.",
+  loc: "Loc.",
+  voc: "Voc.",
+};
+
+const isSimpleNounForms = (forms) => {
+  const keys = Object.keys(forms);
+  if (!keys.length) return false;
+  return keys.every((key) => /^(nom|acc|gen|dat|ins|loc|voc) n$/.test(key));
+};
+
+const isNounForms = (forms) => {
+  const keys = Object.keys(forms);
+  if (!keys.length) return false;
+  return keys.every((key) =>
+    /^(nom|acc|gen|dat|ins|loc|voc) (ns|np)$/.test(key),
+  );
+};
+
+const isAdjectiveForms = (forms) => {
+  const keys = Object.keys(forms);
+  return keys.some((key) =>
+    /^(nom|acc|gen|dat|ins|loc) (am|an|af|ap)$/.test(key),
+  );
+};
+
+const isVerbForms = (forms) => {
+  return ["inf", "pres", "past", "fut", "imp"].some((key) => key in forms);
+};
+
+const createTableCell = (value) => {
+  const td = document.createElement("td");
+  const isEmptyArray = Array.isArray(value) && value.length === 0;
+  const isEmptyString = typeof value === "string" && !value.trim();
+  if (value == null || isEmptyArray || isEmptyString) {
+    const placeholder = document.createElement("span");
+    placeholder.className = "empty-cell";
+    placeholder.textContent = "–";
+    td.appendChild(placeholder);
+    return td;
+  }
+
+  appendFormattedText(td, value);
+  return td;
+};
+
+const createHeaderCell = (text, scope = "col") => {
+  const th = document.createElement("th");
+  if (scope) th.scope = scope;
+  th.textContent = text;
+  return th;
+};
+
+const createRowHeaderCell = (text) => {
+  const th = createHeaderCell(text, "row");
+  th.className = "form-cell-label";
+  return th;
+};
+
+const renderSimpleNounTable = (forms) => {
+  const table = document.createElement("table");
+  table.className = "form-table";
+  Object.keys(caseLabels).forEach((key) => {
+    if (!(key + " n" in forms)) return;
+    const row = table.insertRow();
+    const label = row.insertCell();
+    label.className = "form-cell-label";
+    label.textContent = caseLabels[key];
+    row.appendChild(createTableCell(forms[`${key} n`]));
+  });
+  return table;
+};
+
+const renderNounTable = (forms) => {
+  const table = document.createElement("table");
+  table.className = "form-table";
+  const header = table.insertRow();
+  header.className = "table-header";
+  header.insertCell().textContent = "";
+  const singLabel = header.insertCell();
+  singLabel.textContent = "Sing.";
+  const plurLabel = header.insertCell();
+  plurLabel.textContent = "Plur.";
+
+  Object.keys(caseLabels).forEach((key) => {
+    const row = table.insertRow();
+    const label = row.insertCell();
+    label.className = "form-cell-label";
+    label.textContent = caseLabels[key];
+    row.appendChild(createTableCell(forms[`${key} ns`] || []));
+    row.appendChild(createTableCell(forms[`${key} np`] || []));
+  });
+  return table;
+};
+
+const renderAdjectiveTable = (forms) => {
+  const categories = [
+    ["am", "Male"],
+    ["an", "Neut."],
+    ["af", "Fem."],
+    ["ap", "Plur."],
+  ];
+  const rows = [
+    ["nom", "Nom."],
+    ["acc", "Acc."],
+    ["gen", "Gen."],
+    ["dat", "Dat."],
+    ["ins", "Ins."],
+    ["loc", "Loc."],
+  ];
+  const table = document.createElement("table");
+  table.className = "form-table";
+  const header = table.insertRow();
+  header.className = "table-header";
+  header.insertCell().textContent = "";
+  categories.forEach(([, label]) => {
+    const cell = header.insertCell();
+    cell.textContent = label;
+  });
+
+  rows.forEach(([caseKey, caseLabel]) => {
+    const row = table.insertRow();
+    const labelCell = row.insertCell();
+    labelCell.className = "form-cell-label";
+    labelCell.textContent = caseLabel;
+    categories.forEach(([suffix]) => {
+      row.appendChild(createTableCell(forms[`${caseKey} ${suffix}`] || []));
+    });
+  });
+
+  if ("addl" in forms) {
+    Object.entries(forms.addl).forEach(([addlKey, addlValue]) => {
+      const row = table.insertRow();
+      const labelCell = row.insertCell();
+      labelCell.className = "form-cell-label";
+      labelCell.textContent = humanizeKey(addlKey);
+      const cell = row.insertCell();
+      cell.colSpan = 4;
+      appendFormattedText(cell, addlValue);
+    });
+  }
+
+  return table;
+};
+
+const renderVerbTable = (forms) => {
+  const table = document.createElement("table");
+  table.className = "form-table";
+
+  const addInf = () => {
+    if (!forms.inf) return;
+    const row = table.insertRow();
+    const label = row.insertCell();
+    label.className = "form-cell-label";
+    label.textContent = "Inf.";
+    const valueCell = row.insertCell();
+    valueCell.colSpan = 4;
+    appendFormattedText(valueCell, forms.inf);
+  };
+
+  addInf();
+
+  const renderTenseMatrix = (tenseKey, tenseLabel, headers, rowKeys) => {
+    const headerRow = table.insertRow();
+    headerRow.appendChild(createRowHeaderCell(tenseLabel));
+    headers.forEach((headerText) => {
+      headerRow.appendChild(createHeaderCell(headerText));
+    });
+
+    rowKeys.forEach(([rowLabel, formKeys]) => {
+      const row = table.insertRow();
+      row.appendChild(createRowHeaderCell(rowLabel));
+      formKeys.forEach((formKey) => {
+        row.appendChild(
+          createTableCell(formKey ? forms[tenseKey][formKey] || [] : []),
+        );
+      });
+    });
+
+    if (forms[tenseKey].pp) {
+      Object.entries(forms[tenseKey].pp).forEach(([ppKey, ppValue]) => {
+        const row = table.insertRow();
+        row.appendChild(createRowHeaderCell(humanizeKey(ppKey)));
+        const cell = row.insertCell();
+        cell.colSpan = headers.length;
+        appendFormattedText(cell, ppValue);
+      });
+    }
+  };
+
+  const renderPastMatrix = () => {
+    const headerRow = table.insertRow();
+    headerRow.appendChild(createRowHeaderCell("Past"));
+    ["Male", "Neuter", "Fem."].forEach((headerText) => {
+      headerRow.appendChild(createHeaderCell(headerText));
+    });
+
+    const singRow = table.insertRow();
+    singRow.appendChild(createRowHeaderCell("Sing."));
+    ["ms", "ns", "fs"].forEach((formKey) => {
+      singRow.appendChild(createTableCell(forms.past[formKey] || []));
+    });
+
+    const plurRow = table.insertRow();
+    plurRow.appendChild(createRowHeaderCell("Plur."));
+    const pluralCell = createTableCell(forms.past.p || []);
+    pluralCell.colSpan = 3;
+    plurRow.appendChild(pluralCell);
+
+    if (forms.past.pp) {
+      Object.entries(forms.past.pp).forEach(([ppKey, ppValue]) => {
+        const row = table.insertRow();
+        row.appendChild(createRowHeaderCell(humanizeKey(ppKey)));
+        const cell = row.insertCell();
+        cell.colSpan = 3;
+        appendFormattedText(cell, ppValue);
+      });
+    }
+  };
+
+  if ("past" in forms) {
+    renderPastMatrix();
+  }
+
+  if ("pres" in forms) {
+    renderTenseMatrix(
+      "pres",
+      "Pres.",
+      ["1st", "2nd", "3rd"],
+      [
+        ["Sing.", ["1s", "2s", "3s"]],
+        ["Plur.", ["1p", "2p", "3p"]],
+      ],
+    );
+  }
+
+  if ("fut" in forms) {
+    renderTenseMatrix(
+      "fut",
+      "Fut.",
+      ["1st", "2nd", "3rd"],
+      [
+        ["Sing.", ["1s", "2s", "3s"]],
+        ["Plur.", ["1p", "2p", "3p"]],
+      ],
+    );
+  }
+
+  if ("imp" in forms) {
+    const headerRow = table.insertRow();
+    headerRow.appendChild(createRowHeaderCell("Imp."));
+    ["1st", "2nd"].forEach((headerText) => {
+      headerRow.appendChild(createHeaderCell(headerText));
+    });
+
+    const singularRow = table.insertRow();
+    singularRow.appendChild(createRowHeaderCell("Sing."));
+    singularRow.appendChild(createTableCell([]));
+    singularRow.appendChild(createTableCell(forms.imp["2s"] || []));
+
+    const pluralRow = table.insertRow();
+    pluralRow.appendChild(createRowHeaderCell("Plur."));
+    pluralRow.appendChild(createTableCell(forms.imp["1p"] || []));
+    pluralRow.appendChild(createTableCell(forms.imp["2p"] || []));
+  }
+
+  return table;
+};
+
+const renderGenericFormGroup = (forms) => {
+  const wrapper = document.createElement("div");
+  wrapper.className = "form-group";
+  Object.entries(forms).forEach(([key, value]) => {
+    const row = document.createElement("div");
+    row.className = "form-row";
+    const label = document.createElement("span");
+    label.className = "form-label-inline";
+    label.textContent = humanizeKey(key);
+    row.appendChild(label);
+    row.appendChild(createFormValue(value));
+    wrapper.appendChild(row);
+  });
+  return wrapper;
+};
+
+const renderForms = (forms) => {
+  const container = document.createElement("div");
+  container.className = "entry-forms";
+  if (!forms || Object.keys(forms).length === 0) {
+    const message = document.createElement("p");
+    message.className = "indec";
+    message.textContent = "Indeclinable";
+    container.appendChild(message);
+    return container;
+  }
+
+  if (isSimpleNounForms(forms)) {
+    container.appendChild(renderSimpleNounTable(forms));
+    return container;
+  }
+
+  if (isNounForms(forms)) {
+    container.appendChild(renderNounTable(forms));
+    return container;
+  }
+
+  if (isAdjectiveForms(forms)) {
+    container.appendChild(renderAdjectiveTable(forms));
+    return container;
+  }
+
+  if (isVerbForms(forms)) {
+    container.appendChild(renderVerbTable(forms));
+    return container;
+  }
+
+  container.appendChild(renderGenericFormGroup(forms));
+  return container;
+};
+
+const createEntryRow = (entry) => {
+  const row = document.createElement("article");
+  row.className = "row";
+
+  const wordColumn = document.createElement("div");
+  wordColumn.className = "col";
+  const title = document.createElement("p");
+  title.className = "title";
+  title.lang = "uk";
+  title.appendChild(renderText(entry.word));
+  wordColumn.appendChild(title);
+
+  const meta = document.createElement("p");
+  meta.className = "subtitle";
+  const details = [`${entry.pos}`];
+  if (entry.info) details.push(entry.info);
+  meta.textContent = details.join(" — ");
+  wordColumn.appendChild(meta);
+
+  if (Array.isArray(entry.defs) && entry.defs.length) {
+    const defsList = document.createElement("ul");
+    defsList.className = "entry-list";
+    entry.defs.forEach((def) => {
+      const item = document.createElement("li");
+      item.appendChild(renderText(def));
+      defsList.appendChild(item);
+    });
+    wordColumn.appendChild(defsList);
+  }
+
+  const wiktionaryLink = buildWiktionaryLink(entry.word);
+  const linkWrapper = document.createElement("p");
+  linkWrapper.className = "entry-link";
+  linkWrapper.appendChild(wiktionaryLink);
+  wordColumn.appendChild(linkWrapper);
+
+  const formsColumn = document.createElement("div");
+  formsColumn.className = "col";
+  formsColumn.appendChild(renderForms(entry.forms));
+
+  row.appendChild(wordColumn);
+  row.appendChild(formsColumn);
+  return row;
+};
+
+const exactMatchScore = (entry, query) => {
+  if (!query) return 0;
+  if (entry.normalizedWord === query) return 4;
+  if (
+    entry.normalizedWord.startsWith(`${query} `) ||
+    entry.normalizedWord.endsWith(` ${query}`) ||
+    entry.normalizedWord.includes(` ${query} `)
+  )
+    return 3;
+  if (
+    entry.normalizedDefs.includes(query) ||
+    entry.normalizedForms.includes(query)
+  )
+    return 2;
+  if (entry.normalizedWord.includes(query)) return 1;
+  return 0;
+};
+
+const compareEntries = (a, b) => {
+  if (sortInfo === "alpha") {
+    return a.normalizedWord.localeCompare(b.normalizedWord, "uk");
+  }
+  if (sortInfo === "alpha_rev") {
+    return b.normalizedWord.localeCompare(a.normalizedWord, "uk");
+  }
+  return a.index - b.index;
+};
+
+const FILTER_LABELS = {
+  adjective: "Adjectives",
+  adverb: "Adverbs",
+  noun: "Nouns",
+  numeral: "Numerals",
+  particle: "Particles",
+  phrase: "Phrases",
+  pronoun: "Pronouns",
+  proverb: "Proverbs",
+  symbol: "Symbols",
+  verb: "Verbs",
+};
+
+const getFilterLabel = (filter) => FILTER_LABELS[filter] || filter;
+
+const applyTheme = (theme) => {
+  document.body.classList.remove("theme-light", "theme-dark");
+  if (theme === "light") document.body.classList.add("theme-light");
+  if (theme === "dark") document.body.classList.add("theme-dark");
+};
+
+const resolveTheme = () => {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+};
+
+const updateSummary = () => {
+  if (!words.length) {
+    resultCount.textContent = "Loading dictionary...";
+    return;
+  }
+
+  if (!filteredWords.length) {
+    resultCount.textContent = "No entries match your search.";
+    return;
+  }
+
+  const shown = Math.min(filteredWords.length, currentPage * RESULTS_PER_PAGE);
+  const total = filteredWords.length;
+  const plural = total === 1 ? "entry" : "entries";
+  const parts = [`Showing ${shown} of ${total} ${plural}`];
+  if (curFilter) parts.push(`filtered by ${getFilterLabel(curFilter)}`);
+  if (sortInfo && sortInfo !== "freq")
+    parts.push(`sorted by ${sortInfo.replace("_", " ")}`);
+  resultCount.textContent = `${parts.join(" · ")}.`;
+};
+
+const renderResults = () => {
+  dictionaryList.innerHTML = "";
+
+  if (!filteredWords.length) {
+    const emptyState = document.createElement("div");
+    emptyState.className = "row";
+
+    const message = document.createElement("p");
+    message.textContent = "No results were found for this search.";
+    emptyState.appendChild(message);
+
+    if (searchTerm) {
+      const link = buildWiktionaryLink(
+        searchTerm,
+        "Search Wiktionary for this word.",
+        "wiktionary-link",
+      );
+      const hint = document.createElement("p");
+      hint.appendChild(link);
+      emptyState.appendChild(hint);
+    }
+
+    dictionaryList.appendChild(emptyState);
+    return;
+  }
+
+  const start = 0;
+  const end = Math.min(filteredWords.length, currentPage * RESULTS_PER_PAGE);
+  filteredWords.slice(start, end).forEach((entry) => {
+    dictionaryList.appendChild(createEntryRow(entry));
+  });
+
+  const existingMore = document.getElementById("loadMore");
+  if (existingMore) existingMore.remove();
+
+  if (filteredWords.length > end) {
+    const loadMore = document.createElement("button");
+    loadMore.id = "loadMore";
+    loadMore.type = "button";
+    loadMore.className = "button button--primary";
+    loadMore.textContent = "Show more";
+    loadMore.addEventListener("click", () => {
+      currentPage += 1;
+      renderResults();
+      updateSummary();
+    });
+    const wrapper = document.createElement("div");
+    wrapper.className = "load-more";
+    wrapper.appendChild(loadMore);
+    dictionaryList.appendChild(wrapper);
+  }
+};
+
+const setURL = () => {
+  const params = new URLSearchParams();
+  if (searchTerm) params.set("q", searchTerm);
+  if (curFilter) params.set("f", curFilter);
+  if (sortInfo && sortInfo !== "freq") params.set("s", sortInfo);
+  const url = `${window.location.pathname}${params.size > 0 ? "?" + params.toString() : ""}`;
+  window.history.pushState(null, "", url);
+};
+const debouncedSetURL = debounce(setURL, 500);
+
+const readURL = () => {
+  const params = new URLSearchParams(window.location.search);
+  searchTerm = params.get("q") || "";
+  curFilter = params.get("f") || "";
+  sortInfo = params.get("s") || "freq";
+
+  searchInput.value = searchTerm;
+  filterSelect.value = curFilter;
+  sortSelect.value = sortInfo;
+};
+
+const searchHelper = () => {
+  const query = normalizeText(searchTerm);
+  filteredWords = words.filter((entry) => {
+    if (curFilter && entry.pos !== curFilter) return false;
+    if (!query) return true;
+    return (
+      entry.normalizedWord.includes(query) ||
+      entry.normalizedDefs.includes(query) ||
+      entry.normalizedForms.includes(query)
+    );
+  });
+
+  filteredWords.sort((a, b) => {
+    const scoreA = exactMatchScore(a, query);
+    const scoreB = exactMatchScore(b, query);
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    return compareEntries(a, b);
+  });
+};
+
+const update = () => {
+  searchHelper();
+  renderResults();
+  updateSummary();
+  debouncedSetURL();
+};
+
+const clear = () => {
+  searchTerm = "";
+  curFilter = "";
+  sortInfo = "freq";
+  currentPage = 1;
+  searchInput.value = "";
+  filterSelect.value = "";
+  sortSelect.value = "freq";
+  searchInput.focus();
+  update();
+};
+
+const search = () => {
+  searchTerm = searchInput.value.trim();
+  currentPage = 1;
+  update();
+};
+const pasteFromClipboard = async () => {
+  if (!navigator.clipboard) {
+    searchInput.focus();
+    return;
+  }
+
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text) return;
+    searchInput.value = text.trim();
+    search();
+  } catch (error) {
+    console.warn("Clipboard paste failed:", error);
+    searchInput.focus();
+  }
+};
+
+const select = () => {
+  sortInfo = sortSelect.value;
+  currentPage = 1;
+  update();
+};
+
+const filter = () => {
+  curFilter = filterSelect.value;
+  currentPage = 1;
+  update();
+};
+
+const showError = (message) => {
+  dictionaryList.innerHTML = "";
+  const errorRow = document.createElement("div");
+  errorRow.className = "row";
+  const errorText = document.createElement("p");
+  errorText.textContent = `Unable to load dictionary data: ${message}`;
+  errorText.style.color = "var(--stress)";
+  errorRow.appendChild(errorText);
+  dictionaryList.appendChild(errorRow);
+  resultCount.textContent = "Failed to load data.";
+};
+
+const loadWords = async () => {
+  resultCount.textContent = "Loading dictionary...";
+  try {
+    const response = await fetch("words.json");
+    if (!response.ok) throw new Error(response.statusText || "Fetch failed");
+    const data = await response.json();
+    words = data.map(buildIndex);
+    filteredWords = [...words];
+    update();
+  } catch (error) {
+    showError(error.message || error.toString());
+  }
+};
+
+const bindEvents = () => {
+  clearButton.addEventListener("click", clear);
+  searchInput.addEventListener("input", () => {
+    search();
+  });
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      clear();
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+    }
+  });
+  sortSelect.addEventListener("change", select);
+  filterSelect.addEventListener("change", filter);
+  pasteButton.addEventListener("click", pasteFromClipboard);
+  const toolbar = document.getElementById("toolbar");
+  toolbar.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "F3" || (event.ctrlKey && event.key === "f")) {
+      event.preventDefault();
+      searchInput.focus();
+    }
+  });
+  window.addEventListener("popstate", () => {
+    readURL();
+    update();
+  });
+};
+
+const init = () => {
+  applyTheme(resolveTheme());
+  readURL();
+  bindEvents();
+  loadWords();
+};
+
+window.addEventListener("DOMContentLoaded", init);
