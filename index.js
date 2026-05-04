@@ -804,6 +804,27 @@ const readURL = () => {
   sortSelect.value = sortInfo;
 };
 
+const applyMessageQuery = (message) => {
+  if (!message || typeof message !== "object") return false;
+  const { q, f, s } = message;
+  let changed = false;
+
+  if (typeof q === "string" && q.trim() !== searchTerm) {
+    searchInput.value = q.trim();
+    changed = true;
+  }
+  if (typeof f === "string" && f !== curFilter) {
+    filterSelect.value = f;
+    changed = true;
+  }
+  if (typeof s === "string" && s !== sortInfo) {
+    sortSelect.value = s;
+    changed = true;
+  }
+
+  return changed;
+};
+
 const searchHelper = () => {
   const query = normalizeText(searchTerm);
   filteredWords = words.filter((entry) => {
@@ -930,6 +951,17 @@ const bindEvents = () => {
       searchInput.focus();
     }
   });
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.opener) return;
+    if (!event.data || typeof event.data !== "object") return;
+
+    const changed = applyMessageQuery(event.data);
+    if (changed) {
+      search();
+    }
+  });
+
   window.addEventListener("popstate", () => {
     readURL();
     update();
