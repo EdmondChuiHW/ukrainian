@@ -396,8 +396,17 @@ button {
   background: rgba(93, 144, 255, 0.35);
   color: inherit;
   padding: 0;
+  padding-block: 0.15rem;
   border-radius: 0.15rem;
   /* box-shadow: inset 0 0 0 1px rgba(93, 144, 255, 0.45); */
+}
+
+.cell-exact {
+  background-color: rgba(255, 210, 77, 0.8);
+}
+
+.cell-exact .match {
+  background: #28437c;
 }
 
 .bottom-bar {

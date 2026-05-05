@@ -60,20 +60,27 @@ const buildWiktionaryLink = (
   return link;
 };
 
-const extractText = (value) => {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) return value.map(extractText).join(" ");
+const extractText = (value) => extractTextArray(value).join(" ");
+
+const extractTextArray = (value) => {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(extractTextArray);
   if (value && typeof value === "object")
-    return Object.values(value).map(extractText).join(" ");
-  return "";
+    return Object.values(value).flatMap(extractTextArray);
+  return [];
 };
 
 const buildIndex = (entry) => {
+  const normalizedFormTokens = extractTextArray(entry.forms)
+    .map(normalizeText)
+    .filter(Boolean);
+  const normalizedForms = normalizedFormTokens.join(" ");
   return {
     ...entry,
     normalizedWord: normalizeText(entry.word),
     normalizedDefs: normalizeText(entry.defs?.join(" ") ?? ""),
-    normalizedForms: normalizeText(extractText(entry.forms)),
+    normalizedForms,
+    normalizedFormTokens,
   };
 };
 
@@ -148,6 +155,32 @@ const normalizeCharForHighlight = (char) => {
   return " ";
 };
 
+const getCellText = (value) => {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.join(" ");
+  if (value && typeof value === "object") return extractText(value).join(" ");
+  return "";
+};
+
+const hasExactCellMatch = (value, query) => {
+  const normalizedQuery = normalizeText(query || "");
+  if (!normalizedQuery) return false;
+
+  const text = normalizeText(getCellText(value));
+  if (!text) return false;
+
+  let index = text.indexOf(normalizedQuery);
+  while (index !== -1) {
+    const end = index + normalizedQuery.length;
+    const boundaryBefore = index === 0 || text[index - 1] === " ";
+    const boundaryAfter = end === text.length || text[end] === " ";
+    if (boundaryBefore && boundaryAfter) return true;
+    index = text.indexOf(normalizedQuery, index + 1);
+  }
+
+  return false;
+};
+
 const renderHighlightText = (text, query) => {
   if (typeof text !== "string") return document.createTextNode(text ?? "");
   const normalizedQuery = normalizeText(query || "");
@@ -173,11 +206,12 @@ const renderHighlightText = (text, query) => {
     .join("");
   const ranges = [];
   let index = 0;
+  const queryLength = normalizedQuery.length;
   while (index < normalizedText.length) {
     const found = normalizedText.indexOf(normalizedQuery, index);
     if (found === -1) break;
-    ranges.push([found, found + normalizedQuery.length]);
-    index = found + Math.max(1, normalizedQuery.length);
+    ranges.push({ start: found, end: found + queryLength });
+    index = found + Math.max(1, queryLength);
   }
 
   if (!ranges.length) {
@@ -188,20 +222,18 @@ const renderHighlightText = (text, query) => {
   for (const range of ranges) {
     if (
       !mergedRanges.length ||
-      range[0] > mergedRanges[mergedRanges.length - 1][1]
+      range.start > mergedRanges[mergedRanges.length - 1].end
     ) {
       mergedRanges.push(range);
     } else {
-      mergedRanges[mergedRanges.length - 1][1] = Math.max(
-        mergedRanges[mergedRanges.length - 1][1],
-        range[1],
-      );
+      const previous = mergedRanges[mergedRanges.length - 1];
+      previous.end = Math.max(previous.end, range.end);
     }
   }
 
   const fragment = document.createDocumentFragment();
   let nextSegment = 0;
-  mergedRanges.forEach(([start, end]) => {
+  mergedRanges.forEach(({ start, end }) => {
     while (nextSegment < start) {
       fragment.appendChild(renderStressText(segments[nextSegment].original));
       nextSegment += 1;
@@ -329,6 +361,10 @@ const createTableCell = (value) => {
     placeholder.textContent = "–";
     td.appendChild(placeholder);
     return td;
+  }
+
+  if (hasExactCellMatch(value, searchTerm)) {
+    td.classList.add("cell-exact");
   }
 
   appendFormattedText(td, value);
@@ -657,6 +693,7 @@ const createEntryRow = (entry) => {
 const exactMatchScore = (entry, query) => {
   if (!query) return 0;
   if (entry.normalizedWord === query) return 4;
+  if (entry.normalizedFormTokens.includes(query)) return 3;
   if (
     entry.normalizedWord.startsWith(`${query} `) ||
     entry.normalizedWord.endsWith(` ${query}`) ||
