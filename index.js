@@ -5,6 +5,8 @@ const ACCENT_MARK = "\u0301";
 
 let words = [];
 let filteredWords = [];
+let fallbackQuery = "";
+let fallbackCount = 0;
 let sortInfo = "freq";
 let curFilter = "";
 let searchTerm = "";
@@ -90,10 +92,10 @@ const humanizeKey = (key) => {
     comp: "Comparative",
     super: "Superlative",
     arg: "Argumentative",
-    adv: "Adv. Part.",
-    imp: "Imp. Part.",
-    act: "Act. Part.",
-    pas: "Pass. Part.",
+    adv: "Adv.",
+    imp: "Imp.",
+    act: "Act.",
+    pas: "Pass.",
     m: "Male",
     n: "Neuter",
     f: "Female",
@@ -304,12 +306,17 @@ const createFormValue = (value) => {
   return paragraph;
 };
 
-const appendFormattedText = (container, value) => {
+const appendFormattedText = (container, value, useComma = false) => {
   if (Array.isArray(value)) {
     value.forEach((item, index) => {
       container.appendChild(renderText(item));
-      if (index < value.length - 1)
+      if (index >= value.length - 1) return;
+
+      if (useComma) {
+        container.appendChild(document.createTextNode(", "));
+      } else {
         container.appendChild(document.createElement("br"));
+      }
     });
     return;
   }
@@ -324,6 +331,37 @@ const caseLabels = {
   ins: "Ins.",
   loc: "Loc.",
   voc: "Voc.",
+};
+
+const tooltips = {
+  nom: "Nominative/Називний — what/who?",
+  acc: "Accusative/Знахідний — what/whom?",
+  gen: "Genitive/Родовий — whose/of what?",
+  dat: "Dative/Давальний — to what/whom?",
+  ins: "Instrumental/Орудний — with what? / by what means?",
+  loc: "Locative/Місцевий — where?",
+  voc: "Vocative/Кличний — addressing someone",
+  s: "Singular",
+  p: "Plural",
+  m: "Masculine",
+  n: "Neuter",
+  f: "Feminine",
+  am: "Adjective Masculine",
+  an: "Adjective Neuter",
+  af: "Adjective Feminine",
+  ap: "Adjective Plural",
+  "1st": "я/ми",
+  "2nd": "ти/ви",
+  "3rd": "він/вона/воно/вони",
+  inf: "Infinitive",
+  pres: "Present",
+  past: "Past",
+  fut: "Future",
+  adv: "Adverbial Participle",
+  act: "Active Participle",
+  pas: "Passive Participle",
+  imp: "Impersonal Participle",
+  imperative: "Imperative",
 };
 
 const isSimpleNounForms = (forms) => {
@@ -351,7 +389,7 @@ const isVerbForms = (forms) => {
   return ["inf", "pres", "past", "fut", "imp"].some((key) => key in forms);
 };
 
-const createTableCell = (value) => {
+const createTableCell = (value, tooltip = null) => {
   const td = document.createElement("td");
   const isEmptyArray = Array.isArray(value) && value.length === 0;
   const isEmptyString = typeof value === "string" && !value.trim();
@@ -360,6 +398,7 @@ const createTableCell = (value) => {
     placeholder.className = "empty-cell";
     placeholder.textContent = "–";
     td.appendChild(placeholder);
+    if (tooltip) td.setAttribute("data-tooltip", tooltip);
     return td;
   }
 
@@ -367,19 +406,23 @@ const createTableCell = (value) => {
     td.classList.add("cell-exact");
   }
 
+  if (tooltip) td.setAttribute("data-tooltip", tooltip);
   appendFormattedText(td, value);
   return td;
 };
 
-const createHeaderCell = (text, scope = "col") => {
+const createHeaderCell = (text, scope = "col", key = null) => {
   const th = document.createElement("th");
   if (scope) th.scope = scope;
   th.textContent = text;
+  if (key && tooltips[key]) {
+    th.setAttribute("data-tooltip", tooltips[key]);
+  }
   return th;
 };
 
-const createRowHeaderCell = (text) => {
-  const th = createHeaderCell(text, "row");
+const createRowHeaderCell = (text, key = null) => {
+  const th = createHeaderCell(text, "row", key);
   th.className = "form-cell-label";
   return th;
 };
@@ -393,6 +436,7 @@ const renderSimpleNounTable = (forms) => {
     const label = row.insertCell();
     label.className = "form-cell-label";
     label.textContent = caseLabels[key];
+    if (tooltips[key]) label.setAttribute("data-tooltip", tooltips[key]);
     row.appendChild(createTableCell(forms[`${key} n`]));
   });
   return table;
@@ -406,14 +450,17 @@ const renderNounTable = (forms) => {
   header.insertCell().textContent = "";
   const singLabel = header.insertCell();
   singLabel.textContent = "Sing.";
+  if (tooltips["s"]) singLabel.setAttribute("data-tooltip", tooltips["s"]);
   const plurLabel = header.insertCell();
   plurLabel.textContent = "Plur.";
+  if (tooltips["p"]) plurLabel.setAttribute("data-tooltip", tooltips["p"]);
 
   Object.keys(caseLabels).forEach((key) => {
     const row = table.insertRow();
     const label = row.insertCell();
     label.className = "form-cell-label";
     label.textContent = caseLabels[key];
+    if (tooltips[key]) label.setAttribute("data-tooltip", tooltips[key]);
     row.appendChild(createTableCell(forms[`${key} ns`] || []));
     row.appendChild(createTableCell(forms[`${key} np`] || []));
   });
@@ -440,9 +487,10 @@ const renderAdjectiveTable = (forms) => {
   const header = table.insertRow();
   header.className = "table-header";
   header.insertCell().textContent = "";
-  categories.forEach(([, label]) => {
+  categories.forEach(([key, label]) => {
     const cell = header.insertCell();
     cell.textContent = label;
+    if (tooltips[key]) cell.setAttribute("data-tooltip", tooltips[key]);
   });
 
   rows.forEach(([caseKey, caseLabel]) => {
@@ -450,6 +498,8 @@ const renderAdjectiveTable = (forms) => {
     const labelCell = row.insertCell();
     labelCell.className = "form-cell-label";
     labelCell.textContent = caseLabel;
+    if (tooltips[caseKey])
+      labelCell.setAttribute("data-tooltip", tooltips[caseKey]);
     categories.forEach(([suffix]) => {
       row.appendChild(createTableCell(forms[`${caseKey} ${suffix}`] || []));
     });
@@ -461,6 +511,8 @@ const renderAdjectiveTable = (forms) => {
       const labelCell = row.insertCell();
       labelCell.className = "form-cell-label";
       labelCell.textContent = humanizeKey(addlKey);
+      if (tooltips[addlKey])
+        labelCell.setAttribute("data-tooltip", tooltips[addlKey]);
       const cell = row.insertCell();
       cell.colSpan = 4;
       appendFormattedText(cell, addlValue);
@@ -470,9 +522,67 @@ const renderAdjectiveTable = (forms) => {
   return table;
 };
 
+const getVerbFormTooltip = (tenseKey, formKey, value) => {
+  if (!formKey || value == null) return null;
+
+  const pronounMap = {
+    pres: {
+      "1s": "я",
+      "2s": "ти",
+      "3s": "він/вона/воно",
+      "1p": "ми",
+      "2p": "ви",
+      "3p": "вони",
+    },
+    fut: {
+      "1s": "я",
+      "2s": "ти",
+      "3s": "він/вона/воно",
+      "1p": "ми",
+      "2p": "ви",
+      "3p": "вони",
+    },
+    imp: {
+      "1p": "ми",
+      "2s": "ти",
+      "2p": "ви",
+    },
+    past: {
+      ms: "він",
+      ns: "воно",
+      fs: "вона",
+      p: "вони",
+    },
+  };
+
+  const pronoun = pronounMap[tenseKey]?.[formKey];
+  if (!pronoun) return null;
+
+  const cellValues = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? [value]
+      : [getCellText(value)];
+
+  const text = cellValues
+    .filter(Boolean)
+    .join(" / ")
+    .replaceAll(ACCENT_MARK, "")
+    .trim();
+  if (!text) return null;
+
+  return `${pronoun} ${text}`;
+};
+
 const renderVerbTable = (forms) => {
   const table = document.createElement("table");
   table.className = "form-table";
+
+  const addSeparator = () => {
+    const row = table.insertRow();
+    row.className = "form-separator";
+    row.insertCell().colSpan = 4;
+  };
 
   const addInf = () => {
     if (!forms.inf) return;
@@ -480,26 +590,33 @@ const renderVerbTable = (forms) => {
     const label = row.insertCell();
     label.className = "form-cell-label";
     label.textContent = "Inf.";
+    if (tooltips["inf"]) label.setAttribute("data-tooltip", tooltips["inf"]);
     const valueCell = row.insertCell();
     valueCell.colSpan = 4;
-    appendFormattedText(valueCell, forms.inf);
+    appendFormattedText(valueCell, forms.inf, true);
   };
 
   addInf();
 
   const renderTenseMatrix = (tenseKey, tenseLabel, headers, rowKeys) => {
     const headerRow = table.insertRow();
-    headerRow.appendChild(createRowHeaderCell(tenseLabel));
+    headerRow.appendChild(createRowHeaderCell(tenseLabel, tenseKey));
     headers.forEach((headerText) => {
-      headerRow.appendChild(createHeaderCell(headerText));
+      const headerCell = createHeaderCell(headerText);
+      if (tooltips[headerText])
+        headerCell.setAttribute("data-tooltip", tooltips[headerText]);
+      headerRow.appendChild(headerCell);
     });
 
     rowKeys.forEach(([rowLabel, formKeys]) => {
       const row = table.insertRow();
-      row.appendChild(createRowHeaderCell(rowLabel));
+      const rowLabelKey =
+        rowLabel === "Sing." ? "s" : rowLabel === "Plur." ? "p" : rowLabel;
+      row.appendChild(createRowHeaderCell(rowLabel, rowLabelKey));
       formKeys.forEach((formKey) => {
+        const value = formKey ? forms[tenseKey][formKey] || [] : [];
         row.appendChild(
-          createTableCell(formKey ? forms[tenseKey][formKey] || [] : []),
+          createTableCell(value, getVerbFormTooltip(tenseKey, formKey, value)),
         );
       });
     });
@@ -507,7 +624,7 @@ const renderVerbTable = (forms) => {
     if (forms[tenseKey].pp) {
       Object.entries(forms[tenseKey].pp).forEach(([ppKey, ppValue]) => {
         const row = table.insertRow();
-        row.appendChild(createRowHeaderCell(humanizeKey(ppKey)));
+        row.appendChild(createRowHeaderCell(humanizeKey(ppKey), ppKey));
         const cell = row.insertCell();
         cell.colSpan = headers.length;
         appendFormattedText(cell, ppValue);
@@ -517,27 +634,38 @@ const renderVerbTable = (forms) => {
 
   const renderPastMatrix = () => {
     const headerRow = table.insertRow();
-    headerRow.appendChild(createRowHeaderCell("Past"));
-    ["Male", "Neuter", "Fem."].forEach((headerText) => {
-      headerRow.appendChild(createHeaderCell(headerText));
+    headerRow.appendChild(createRowHeaderCell("Past", "past"));
+    ["Male", "Neuter", "Fem."].forEach((headerText, index) => {
+      const headerCell = createHeaderCell(headerText);
+      const keyMap = { Male: "m", Neuter: "n", "Fem.": "f" };
+      if (tooltips[keyMap[headerText]])
+        headerCell.setAttribute("data-tooltip", tooltips[keyMap[headerText]]);
+      headerRow.appendChild(headerCell);
     });
 
     const singRow = table.insertRow();
-    singRow.appendChild(createRowHeaderCell("Sing."));
+    singRow.appendChild(createRowHeaderCell("Sing.", "s"));
     ["ms", "ns", "fs"].forEach((formKey) => {
-      singRow.appendChild(createTableCell(forms.past[formKey] || []));
+      const value = forms.past[formKey] || [];
+      singRow.appendChild(
+        createTableCell(value, getVerbFormTooltip("past", formKey, value)),
+      );
     });
 
     const plurRow = table.insertRow();
-    plurRow.appendChild(createRowHeaderCell("Plur."));
-    const pluralCell = createTableCell(forms.past.p || []);
+    plurRow.appendChild(createRowHeaderCell("Plur.", "p"));
+    const pluralValue = forms.past.p || [];
+    const pluralCell = createTableCell(
+      pluralValue,
+      getVerbFormTooltip("past", "p", pluralValue),
+    );
     pluralCell.colSpan = 3;
     plurRow.appendChild(pluralCell);
 
     if (forms.past.pp) {
       Object.entries(forms.past.pp).forEach(([ppKey, ppValue]) => {
         const row = table.insertRow();
-        row.appendChild(createRowHeaderCell(humanizeKey(ppKey)));
+        row.appendChild(createRowHeaderCell(humanizeKey(ppKey), ppKey));
         const cell = row.insertCell();
         cell.colSpan = 3;
         appendFormattedText(cell, ppValue);
@@ -546,10 +674,12 @@ const renderVerbTable = (forms) => {
   };
 
   if ("past" in forms) {
+    addSeparator();
     renderPastMatrix();
   }
 
   if ("pres" in forms) {
+    addSeparator();
     renderTenseMatrix(
       "pres",
       "Pres.",
@@ -562,6 +692,7 @@ const renderVerbTable = (forms) => {
   }
 
   if ("fut" in forms) {
+    addSeparator();
     renderTenseMatrix(
       "fut",
       "Fut.",
@@ -574,21 +705,34 @@ const renderVerbTable = (forms) => {
   }
 
   if ("imp" in forms) {
+    addSeparator();
     const headerRow = table.insertRow();
-    headerRow.appendChild(createRowHeaderCell("Imp."));
+    headerRow.appendChild(createRowHeaderCell("Imp.", "imperative"));
     ["1st", "2nd"].forEach((headerText) => {
-      headerRow.appendChild(createHeaderCell(headerText));
+      const headerCell = createHeaderCell(headerText);
+      if (tooltips[headerText])
+        headerCell.setAttribute("data-tooltip", tooltips[headerText]);
+      headerRow.appendChild(headerCell);
     });
 
     const singularRow = table.insertRow();
-    singularRow.appendChild(createRowHeaderCell("Sing."));
+    singularRow.appendChild(createRowHeaderCell("Sing.", "s"));
     singularRow.appendChild(createTableCell([]));
-    singularRow.appendChild(createTableCell(forms.imp["2s"] || []));
+    const imp2sValue = forms.imp["2s"] || [];
+    singularRow.appendChild(
+      createTableCell(imp2sValue, getVerbFormTooltip("imp", "2s", imp2sValue)),
+    );
 
     const pluralRow = table.insertRow();
-    pluralRow.appendChild(createRowHeaderCell("Plur."));
-    pluralRow.appendChild(createTableCell(forms.imp["1p"] || []));
-    pluralRow.appendChild(createTableCell(forms.imp["2p"] || []));
+    pluralRow.appendChild(createRowHeaderCell("Plur.", "p"));
+    const imp1pValue = forms.imp["1p"] || [];
+    pluralRow.appendChild(
+      createTableCell(imp1pValue, getVerbFormTooltip("imp", "1p", imp1pValue)),
+    );
+    const imp2pValue = forms.imp["2p"] || [];
+    pluralRow.appendChild(
+      createTableCell(imp2pValue, getVerbFormTooltip("imp", "2p", imp2pValue)),
+    );
   }
 
   return table;
@@ -649,20 +793,25 @@ const createEntryRow = (entry) => {
   const row = document.createElement("article");
   row.className = "row";
 
+  const titleContainer = document.createElement("div");
+  titleContainer.className = "title-container";
+
   const wordColumn = document.createElement("div");
-  wordColumn.className = "col";
-  const title = document.createElement("p");
+  wordColumn.className = "col entry-word-column";
+  const title = document.createElement("h1");
   title.className = "title";
   title.lang = "uk";
   title.appendChild(renderText(entry.word));
-  wordColumn.appendChild(title);
+  titleContainer.appendChild(title);
 
-  const meta = document.createElement("p");
+  const meta = document.createElement("h2");
   meta.className = "subtitle";
   const details = [`${entry.pos}`];
   if (entry.info) details.push(entry.info);
   meta.textContent = details.join(" — ");
-  wordColumn.appendChild(meta);
+  titleContainer.appendChild(meta);
+
+  wordColumn.appendChild(titleContainer);
 
   if (Array.isArray(entry.defs) && entry.defs.length) {
     const defsList = document.createElement("ul");
@@ -679,14 +828,14 @@ const createEntryRow = (entry) => {
   const linkWrapper = document.createElement("p");
   linkWrapper.className = "entry-link";
   linkWrapper.appendChild(wiktionaryLink);
-  wordColumn.appendChild(linkWrapper);
 
   const formsColumn = document.createElement("div");
-  formsColumn.className = "col";
+  formsColumn.className = "col entry-forms-column";
   formsColumn.appendChild(renderForms(entry.forms));
 
   row.appendChild(wordColumn);
   row.appendChild(formsColumn);
+  row.appendChild(linkWrapper);
   return row;
 };
 
@@ -778,6 +927,20 @@ const renderResults = () => {
     message.textContent = "No results were found for this search.";
     emptyState.appendChild(message);
 
+    if (fallbackQuery && fallbackCount > 0) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "button button--secondary";
+      button.textContent = `Search '${fallbackQuery}' instead? (${fallbackCount} results)`;
+      button.addEventListener("click", () => {
+        searchInput.value = fallbackQuery;
+        searchTerm = fallbackQuery;
+        currentPage = 1;
+        update();
+      });
+      emptyState.appendChild(button);
+    }
+
     if (searchTerm) {
       const link = buildWiktionaryLink(
         searchTerm,
@@ -862,17 +1025,46 @@ const applyMessageQuery = (message) => {
   return changed;
 };
 
+const matchesSearchQuery = (entry, searchQuery) => {
+  if (curFilter && entry.pos !== curFilter) return false;
+  if (!searchQuery) return true;
+  return (
+    entry.normalizedWord.includes(searchQuery) ||
+    entry.normalizedDefs.includes(searchQuery) ||
+    entry.normalizedForms.includes(searchQuery)
+  );
+};
+
+const searchEntries = (searchQuery) =>
+  words.filter((entry) => matchesSearchQuery(entry, searchQuery));
+
+const getSuffixFallbackResult = (query) => {
+  if (!query) return { query: "", count: 0 };
+  let candidate = query;
+
+  while (candidate) {
+    candidate = candidate.slice(0, -1).trim();
+    if (!candidate) return { query: "", count: 0 };
+
+    const results = searchEntries(candidate);
+    if (results.length) return { query: candidate, count: results.length };
+  }
+
+  return { query: "", count: 0 };
+};
+
 const searchHelper = () => {
   const query = normalizeText(searchTerm);
-  filteredWords = words.filter((entry) => {
-    if (curFilter && entry.pos !== curFilter) return false;
-    if (!query) return true;
-    return (
-      entry.normalizedWord.includes(query) ||
-      entry.normalizedDefs.includes(query) ||
-      entry.normalizedForms.includes(query)
-    );
-  });
+
+  filteredWords = searchEntries(query);
+  fallbackQuery = "";
+  fallbackCount = 0;
+
+  if (!filteredWords.length && query) {
+    const fallback = getSuffixFallbackResult(query);
+    fallbackQuery = fallback.query;
+    fallbackCount = fallback.count;
+  }
 
   filteredWords.sort((a, b) => {
     const scoreA = exactMatchScore(a, query);
@@ -882,10 +1074,15 @@ const searchHelper = () => {
   });
 };
 
+const resetScrollTop = () => {
+  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+};
+
 const update = () => {
   searchHelper();
   renderResults();
   updateSummary();
+  resetScrollTop();
   debouncedSetURL();
 };
 
