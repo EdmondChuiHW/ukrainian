@@ -11,6 +11,7 @@ let sortInfo = "freq";
 let curFilter = "";
 let searchTerm = "";
 let currentPage = 1;
+let verbAspectMap = {};
 
 const searchInput = document.getElementById("search");
 const sortSelect = document.getElementById("sort");
@@ -60,6 +61,67 @@ const buildWiktionaryLink = (
   link.rel = "noopener noreferrer";
   link.textContent = text;
   return link;
+};
+
+const setSearchQuery = (query) => {
+  const normalizedQuery = query?.toString().trim();
+  if (!normalizedQuery) return;
+  searchInput.value = normalizedQuery;
+  searchTerm = normalizedQuery;
+  currentPage = 1;
+  update();
+};
+
+const gotoCounterpart = (word) => {
+  setSearchQuery(word);
+};
+
+const renderCounterpartLinks = (entry) => {
+  if (!entry || typeof entry.index !== "number") return null;
+  const counterpart = verbAspectMap[entry.index];
+  if (!counterpart) return null;
+
+  const targets = Array.isArray(counterpart) ? counterpart : [counterpart];
+  if (!targets.length) return null;
+
+  const label = document.createElement("span");
+  const entryInfo = (entry.info || "").toLowerCase();
+  const labelText = entryInfo.includes("imperfective")
+    ? "Perfective: "
+    : entryInfo.includes("perfective")
+      ? "Imperfective: "
+      : targets.length === 1
+        ? "Counterpart: "
+        : "Counterparts: ";
+  label.textContent = labelText;
+
+  const container = document.createElement("p");
+  container.className = "entry-counterpart";
+  container.appendChild(label);
+
+  targets.forEach((targetIndex, idx) => {
+    const targetEntry = words[targetIndex];
+    if (!targetEntry) return;
+
+    const targetWord = targetEntry.word
+      .toString()
+      .replaceAll(ACCENT_MARK, "")
+      .trim();
+    const link = document.createElement("a");
+    link.href = `?q=${encodeURIComponent(targetWord)}`;
+    link.className = "counterpart-link";
+    link.appendChild(renderText(targetEntry.word));
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      gotoCounterpart(targetWord);
+    });
+    container.appendChild(link);
+    if (idx !== targets.length - 1) {
+      container.appendChild(document.createTextNode(", "));
+    }
+  });
+
+  return container;
 };
 
 const extractText = (value) => extractTextArray(value).join(" ");
@@ -811,6 +873,11 @@ const createEntryRow = (entry) => {
   meta.textContent = details.join(" — ");
   titleContainer.appendChild(meta);
 
+  const counterpartLinks = renderCounterpartLinks(entry);
+  if (counterpartLinks) {
+    titleContainer.appendChild(counterpartLinks);
+  }
+
   wordColumn.appendChild(titleContainer);
 
   if (Array.isArray(entry.defs) && entry.defs.length) {
@@ -933,10 +1000,7 @@ const renderResults = () => {
       button.className = "button button--secondary";
       button.textContent = `Search '${fallbackQuery}' instead? (${fallbackCount} results)`;
       button.addEventListener("click", () => {
-        searchInput.value = fallbackQuery;
-        searchTerm = fallbackQuery;
-        currentPage = 1;
-        update();
+        setSearchQuery(fallbackQuery);
       });
       emptyState.appendChild(button);
     }
@@ -1144,6 +1208,16 @@ const showError = (message) => {
   resultCount.textContent = "Failed to load data.";
 };
 
+const loadVerbAspectMap = async () => {
+  try {
+    const response = await fetch("verb_aspect_mapping.json");
+    if (!response.ok) throw new Error(response.statusText || "Fetch failed");
+    verbAspectMap = await response.json();
+  } catch (error) {
+    verbAspectMap = {};
+  }
+};
+
 const loadWords = async () => {
   resultCount.textContent = "Loading dictionary...";
   try {
@@ -1152,6 +1226,7 @@ const loadWords = async () => {
     const data = await response.json();
     words = data.map(buildIndex);
     filteredWords = [...words];
+    await loadVerbAspectMap();
     update();
   } catch (error) {
     showError(error.message || error.toString());
