@@ -1,8 +1,8 @@
-import { defineConfig } from "vite";
-import react, { reactCompilerPreset } from "@vitejs/plugin-react";
-import babel from "@rolldown/plugin-babel";
+import { defineConfig } from 'vite';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
 
-const isDevelopment = process.env.NODE_ENV === "development";
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -11,7 +11,7 @@ export default defineConfig({
     babel({
       presets: [
         reactCompilerPreset({
-          panicThreshold: isDevelopment ? "critical_errors" : "none",
+          panicThreshold: isDevelopment ? 'critical_errors' : 'none',
         }),
       ],
     }),
@@ -21,10 +21,10 @@ export default defineConfig({
     open: false,
   },
   build: {
-    outDir: "dist/",
+    outDir: 'dist/',
     rollupOptions: {
       input: {
-        main: "index.html",
+        main: 'index.html',
       },
     },
   },

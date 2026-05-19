@@ -2,25 +2,25 @@ import React from 'react';
 import FormCell from './FormCell';
 
 const CASE_LABELS: { [key: string]: string } = {
-  nom: "Nom.",
-  acc: "Acc.",
-  gen: "Gen.",
-  dat: "Dat.",
-  ins: "Ins.",
-  loc: "Loc.",
-  voc: "Voc.",
+  nom: 'Nom.',
+  acc: 'Acc.',
+  gen: 'Gen.',
+  dat: 'Dat.',
+  ins: 'Ins.',
+  loc: 'Loc.',
+  voc: 'Voc.',
 };
 
 const TOOLTIPS: { [key: string]: string } = {
-  nom: "Nominative/Називний — what/who?",
-  acc: "Accusative/Знахідний — what/whom?",
-  gen: "Genitive/Родовий — of what/whom?",
-  dat: "Dative/Давальний — to/for what/whom?",
-  ins: "Instrumental/Орудний — by/with what/whom?",
-  loc: "Locative/Місцевий — in/on what/whom?",
-  voc: "Vocative/Кличний — direct address",
-  s: "Singular/Однина",
-  p: "Plural/Множина",
+  nom: 'Nominative/Називний — what/who?',
+  acc: 'Accusative/Знахідний — what/whom?',
+  gen: 'Genitive/Родовий — of what/whom?',
+  dat: 'Dative/Давальний — to/for what/whom?',
+  ins: 'Instrumental/Орудний — by/with what/whom?',
+  loc: 'Locative/Місцевий — in/on what/whom?',
+  voc: 'Vocative/Кличний — direct address',
+  s: 'Singular/Однина',
+  p: 'Plural/Множина',
 };
 
 interface NounTableProps {
@@ -44,11 +44,23 @@ export const NounTable: React.FC<NounTableProps> = ({ forms, query }) => {
           const plurVal = forms[`${caseKey} np`] || [];
           return (
             <tr key={caseKey}>
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS[caseKey]}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS[caseKey]}
+              >
                 {caseLabel}
               </th>
-              <FormCell value={singVal} tooltip={TOOLTIPS[caseKey]} query={query} />
-              <FormCell value={plurVal} tooltip={TOOLTIPS[caseKey]} query={query} />
+              <FormCell
+                value={singVal}
+                tooltip={TOOLTIPS[caseKey]}
+                query={query}
+              />
+              <FormCell
+                value={plurVal}
+                tooltip={TOOLTIPS[caseKey]}
+                query={query}
+              />
             </tr>
           );
         })}

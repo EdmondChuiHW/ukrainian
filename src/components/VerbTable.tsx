@@ -4,51 +4,55 @@ import HighlightedText from './HighlightedText';
 import { getCellText, humanizeKey } from './utils';
 
 const TOOLTIPS: { [key: string]: string } = {
-  inf: "Infinitive/Інфінітив",
-  past: "Past Tense/Минулий час",
-  pres: "Present Tense/Теперішній час",
-  fut: "Future Tense/Майбутній час",
-  imperative: "Imperative Mood/Наказовий спосіб",
-  "1st": "1st Person/Перша особа (я, ми)",
-  "2nd": "2nd Person/Друга особа (ти, ви)",
-  "3rd": "3rd Person/Третя особа (він, вона, воно, вони)",
-  m: "Male/Чоловічий",
-  n: "Neuter/Середній",
-  f: "Female/Жіночий",
-  s: "Singular/Однина",
-  p: "Plural/Множина",
+  inf: 'Infinitive/Інфінітив',
+  past: 'Past Tense/Минулий час',
+  pres: 'Present Tense/Теперішній час',
+  fut: 'Future Tense/Майбутній час',
+  imperative: 'Imperative Mood/Наказовий спосіб',
+  '1st': '1st Person/Перша особа (я, ми)',
+  '2nd': '2nd Person/Друга особа (ти, ви)',
+  '3rd': '3rd Person/Третя особа (він, вона, воно, вони)',
+  m: 'Male/Чоловічий',
+  n: 'Neuter/Середній',
+  f: 'Female/Жіночий',
+  s: 'Singular/Однина',
+  p: 'Plural/Множина',
 };
 
-const getVerbFormTooltip = (tenseKey: string, formKey: string, value: any): string | undefined => {
+const getVerbFormTooltip = (
+  tenseKey: string,
+  formKey: string,
+  value: any,
+): string | undefined => {
   if (!formKey || value == null) return undefined;
 
   const pronounMap: { [tense: string]: { [form: string]: string } } = {
     pres: {
-      "1s": "я",
-      "2s": "ти",
-      "3s": "він/вона/воно",
-      "1p": "ми",
-      "2p": "ви",
-      "3p": "вони",
+      '1s': 'я',
+      '2s': 'ти',
+      '3s': 'він/вона/воно',
+      '1p': 'ми',
+      '2p': 'ви',
+      '3p': 'вони',
     },
     fut: {
-      "1s": "я",
-      "2s": "ти",
-      "3s": "він/вона/воно",
-      "1p": "ми",
-      "2p": "ви",
-      "3p": "вони",
+      '1s': 'я',
+      '2s': 'ти',
+      '3s': 'він/вона/воно',
+      '1p': 'ми',
+      '2p': 'ви',
+      '3p': 'вони',
     },
     imp: {
-      "1p": "ми",
-      "2s": "ти",
-      "2p": "ви",
+      '1p': 'ми',
+      '2s': 'ти',
+      '2p': 'ви',
     },
     past: {
-      ms: "він",
-      ns: "воно",
-      fs: "вона",
-      p: "вони",
+      ms: 'він',
+      ns: 'воно',
+      fs: 'вона',
+      p: 'вони',
     },
   };
 
@@ -57,14 +61,14 @@ const getVerbFormTooltip = (tenseKey: string, formKey: string, value: any): stri
 
   const cellValues = Array.isArray(value)
     ? value
-    : typeof value === "string"
+    : typeof value === 'string'
       ? [value]
       : [getCellText(value)];
 
   const text = cellValues
     .filter(Boolean)
-    .join(" / ")
-    .replaceAll("\u0301", "")
+    .join(' / ')
+    .replaceAll('\u0301', '')
     .trim();
 
   if (!text) return undefined;
@@ -84,7 +88,11 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
         {/* Infinitive Row */}
         {forms.inf && (
           <tr>
-            <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.inf}>
+            <th
+              scope="row"
+              className="form-cell-label"
+              data-tooltip={TOOLTIPS.inf}
+            >
               Inf.
             </th>
             <td colSpan={4}>
@@ -103,13 +111,17 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
         )}
 
         {/* Past Matrix */}
-        {"past" in forms && (
+        {'past' in forms && (
           <>
             <tr className="form-separator">
               <td colSpan={4}></td>
             </tr>
             <tr className="table-header">
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.past}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.past}
+              >
                 Past
               </th>
               <th data-tooltip={TOOLTIPS.m}>Male</th>
@@ -117,28 +129,36 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               <th data-tooltip={TOOLTIPS.f}>Fem.</th>
             </tr>
             <tr>
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.s}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.s}
+              >
                 Sing.
               </th>
-              {["ms", "ns", "fs"].map((key) => {
+              {['ms', 'ns', 'fs'].map((key) => {
                 const val = forms.past[key] || [];
                 return (
                   <FormCell
                     key={key}
                     value={val}
-                    tooltip={getVerbFormTooltip("past", key, val)}
+                    tooltip={getVerbFormTooltip('past', key, val)}
                     query={query}
                   />
                 );
               })}
             </tr>
             <tr>
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.p}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.p}
+              >
                 Plur.
               </th>
               <FormCell
                 value={forms.past.p || []}
-                tooltip={getVerbFormTooltip("past", "p", forms.past.p || [])}
+                tooltip={getVerbFormTooltip('past', 'p', forms.past.p || [])}
                 query={query}
                 {...({ colSpan: 3 } as any)} // Allow standard colSpan passing if needed, or simply render
               />
@@ -149,7 +169,11 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
             {forms.past.pp &&
               Object.entries(forms.past.pp).map(([ppKey, ppValue]) => (
                 <tr key={ppKey}>
-                  <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS[ppKey]}>
+                  <th
+                    scope="row"
+                    className="form-cell-label"
+                    data-tooltip={TOOLTIPS[ppKey]}
+                  >
                     {humanizeKey(ppKey)}
                   </th>
                   <td colSpan={3}>
@@ -170,46 +194,58 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
         )}
 
         {/* Present Matrix */}
-        {"pres" in forms && (
+        {'pres' in forms && (
           <>
             <tr className="form-separator">
               <td colSpan={4}></td>
             </tr>
             <tr className="table-header">
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.pres}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.pres}
+              >
                 Pres.
               </th>
-              <th data-tooltip={TOOLTIPS["1st"]}>1st</th>
-              <th data-tooltip={TOOLTIPS["2nd"]}>2nd</th>
-              <th data-tooltip={TOOLTIPS["3rd"]}>3rd</th>
+              <th data-tooltip={TOOLTIPS['1st']}>1st</th>
+              <th data-tooltip={TOOLTIPS['2nd']}>2nd</th>
+              <th data-tooltip={TOOLTIPS['3rd']}>3rd</th>
             </tr>
             <tr>
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.s}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.s}
+              >
                 Sing.
               </th>
-              {["1s", "2s", "3s"].map((key) => {
+              {['1s', '2s', '3s'].map((key) => {
                 const val = forms.pres[key] || [];
                 return (
                   <FormCell
                     key={key}
                     value={val}
-                    tooltip={getVerbFormTooltip("pres", key, val)}
+                    tooltip={getVerbFormTooltip('pres', key, val)}
                     query={query}
                   />
                 );
               })}
             </tr>
             <tr>
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.p}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.p}
+              >
                 Plur.
               </th>
-              {["1p", "2p", "3p"].map((key) => {
+              {['1p', '2p', '3p'].map((key) => {
                 const val = forms.pres[key] || [];
                 return (
                   <FormCell
                     key={key}
                     value={val}
-                    tooltip={getVerbFormTooltip("pres", key, val)}
+                    tooltip={getVerbFormTooltip('pres', key, val)}
                     query={query}
                   />
                 );
@@ -218,7 +254,11 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
             {forms.pres.pp &&
               Object.entries(forms.pres.pp).map(([ppKey, ppValue]) => (
                 <tr key={ppKey}>
-                  <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS[ppKey]}>
+                  <th
+                    scope="row"
+                    className="form-cell-label"
+                    data-tooltip={TOOLTIPS[ppKey]}
+                  >
                     {humanizeKey(ppKey)}
                   </th>
                   <td colSpan={3}>
@@ -239,46 +279,58 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
         )}
 
         {/* Future Matrix */}
-        {"fut" in forms && (
+        {'fut' in forms && (
           <>
             <tr className="form-separator">
               <td colSpan={4}></td>
             </tr>
             <tr className="table-header">
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.fut}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.fut}
+              >
                 Fut.
               </th>
-              <th data-tooltip={TOOLTIPS["1st"]}>1st</th>
-              <th data-tooltip={TOOLTIPS["2nd"]}>2nd</th>
-              <th data-tooltip={TOOLTIPS["3rd"]}>3rd</th>
+              <th data-tooltip={TOOLTIPS['1st']}>1st</th>
+              <th data-tooltip={TOOLTIPS['2nd']}>2nd</th>
+              <th data-tooltip={TOOLTIPS['3rd']}>3rd</th>
             </tr>
             <tr>
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.s}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.s}
+              >
                 Sing.
               </th>
-              {["1s", "2s", "3s"].map((key) => {
+              {['1s', '2s', '3s'].map((key) => {
                 const val = forms.fut[key] || [];
                 return (
                   <FormCell
                     key={key}
                     value={val}
-                    tooltip={getVerbFormTooltip("fut", key, val)}
+                    tooltip={getVerbFormTooltip('fut', key, val)}
                     query={query}
                   />
                 );
               })}
             </tr>
             <tr>
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.p}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.p}
+              >
                 Plur.
               </th>
-              {["1p", "2p", "3p"].map((key) => {
+              {['1p', '2p', '3p'].map((key) => {
                 const val = forms.fut[key] || [];
                 return (
                   <FormCell
                     key={key}
                     value={val}
-                    tooltip={getVerbFormTooltip("fut", key, val)}
+                    tooltip={getVerbFormTooltip('fut', key, val)}
                     query={query}
                   />
                 );
@@ -287,7 +339,11 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
             {forms.fut.pp &&
               Object.entries(forms.fut.pp).map(([ppKey, ppValue]) => (
                 <tr key={ppKey}>
-                  <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS[ppKey]}>
+                  <th
+                    scope="row"
+                    className="form-cell-label"
+                    data-tooltip={TOOLTIPS[ppKey]}
+                  >
                     {humanizeKey(ppKey)}
                   </th>
                   <td colSpan={3}>
@@ -308,45 +364,57 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
         )}
 
         {/* Imperative Matrix */}
-        {"imp" in forms && (
+        {'imp' in forms && (
           <>
             <tr className="form-separator">
               <td colSpan={4}></td>
             </tr>
             <tr className="table-header">
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.imperative}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.imperative}
+              >
                 Imp.
               </th>
-              <th data-tooltip={TOOLTIPS["1st"]}>1st</th>
-              <th data-tooltip={TOOLTIPS["2nd"]}>2nd</th>
+              <th data-tooltip={TOOLTIPS['1st']}>1st</th>
+              <th data-tooltip={TOOLTIPS['2nd']}>2nd</th>
               <th></th>
             </tr>
             <tr>
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.s}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.s}
+              >
                 Sing.
               </th>
               <td>
                 <span className="empty-cell">–</span>
               </td>
               <FormCell
-                value={forms.imp["2s"] || []}
-                tooltip={getVerbFormTooltip("imp", "2s", forms.imp["2s"] || [])}
+                value={forms.imp['2s'] || []}
+                tooltip={getVerbFormTooltip('imp', '2s', forms.imp['2s'] || [])}
                 query={query}
               />
               <td></td>
             </tr>
             <tr>
-              <th scope="row" className="form-cell-label" data-tooltip={TOOLTIPS.p}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip={TOOLTIPS.p}
+              >
                 Plur.
               </th>
               <FormCell
-                value={forms.imp["1p"] || []}
-                tooltip={getVerbFormTooltip("imp", "1p", forms.imp["1p"] || [])}
+                value={forms.imp['1p'] || []}
+                tooltip={getVerbFormTooltip('imp', '1p', forms.imp['1p'] || [])}
                 query={query}
               />
               <FormCell
-                value={forms.imp["2p"] || []}
-                tooltip={getVerbFormTooltip("imp", "2p", forms.imp["2p"] || [])}
+                value={forms.imp['2p'] || []}
+                tooltip={getVerbFormTooltip('imp', '2p', forms.imp['2p'] || [])}
                 query={query}
               />
               <td></td>

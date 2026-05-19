@@ -8,7 +8,11 @@ interface FormCellProps {
   query: string;
 }
 
-export const FormCell: React.FC<FormCellProps> = ({ value, tooltip, query }) => {
+export const FormCell: React.FC<FormCellProps> = ({
+  value,
+  tooltip,
+  query,
+}) => {
   const isEmptyArray = Array.isArray(value) && value.length === 0;
   const isEmptyString = typeof value === 'string' && !value.trim();
 

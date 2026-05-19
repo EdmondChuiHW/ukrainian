@@ -21,18 +21,22 @@ const isNounForms = (forms: any): boolean => {
   if (!forms) return false;
   const keys = Object.keys(forms);
   if (!keys.length) return false;
-  return keys.every((key) => /^(nom|acc|gen|dat|ins|loc|voc) (ns|np)$/.test(key));
+  return keys.every((key) =>
+    /^(nom|acc|gen|dat|ins|loc|voc) (ns|np)$/.test(key),
+  );
 };
 
 const isAdjectiveForms = (forms: any): boolean => {
   if (!forms) return false;
   const keys = Object.keys(forms);
-  return keys.some((key) => /^(nom|acc|gen|dat|ins|loc) (am|an|af|ap)$/.test(key));
+  return keys.some((key) =>
+    /^(nom|acc|gen|dat|ins|loc) (am|an|af|ap)$/.test(key),
+  );
 };
 
 const isVerbForms = (forms: any): boolean => {
   if (!forms) return false;
-  return ["inf", "pres", "past", "fut", "imp"].some((key) => key in forms);
+  return ['inf', 'pres', 'past', 'fut', 'imp'].some((key) => key in forms);
 };
 
 export const FormsTable: React.FC<FormsTableProps> = ({ forms, query }) => {

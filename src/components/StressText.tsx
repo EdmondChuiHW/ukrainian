@@ -19,15 +19,11 @@ export const StressText: React.FC<StressTextProps> = ({ text }) => {
       elements.push(
         <span key={i} className="stress">
           {char}
-        </span>
+        </span>,
       );
       i++; // skip the accent mark
     } else if (char !== ACCENT_MARK) {
-      elements.push(
-        <Fragment key={i}>
-          {char}
-        </Fragment>
-      );
+      elements.push(<Fragment key={i}>{char}</Fragment>);
     }
   }
 

@@ -43,7 +43,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearchChange }) => {
   return (
     <div className="toolbar" role="search" aria-label="Dictionary search">
       <div className="toolbar-field">
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
           <input
             ref={inputRef}
             id="search"

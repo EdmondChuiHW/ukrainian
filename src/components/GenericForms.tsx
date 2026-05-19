@@ -7,7 +7,10 @@ interface GenericFormsProps {
   query: string;
 }
 
-export const FormValue: React.FC<{ value: any; query: string }> = ({ value, query }) => {
+export const FormValue: React.FC<{ value: any; query: string }> = ({
+  value,
+  query,
+}) => {
   if (Array.isArray(value)) {
     return (
       <div className="form-values">

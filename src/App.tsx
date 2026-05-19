@@ -4,11 +4,11 @@ import React, {
   useMemo,
   useDeferredValue,
   useCallback,
-} from "react";
-import { useQueryState } from "nuqs";
-import SearchBar from "./components/SearchBar";
-import EntryRow from "./components/EntryRow";
-import { normalizeText } from "./components/utils";
+} from 'react';
+import { useQueryState } from 'nuqs';
+import SearchBar from './components/SearchBar';
+import EntryRow from './components/EntryRow';
+import { normalizeText } from './components/utils';
 
 export interface DictionaryEntry {
   index: number;
@@ -59,9 +59,9 @@ const exactMatchScore = (entry: DictionaryEntry, query: string): number => {
 };
 
 const extractTextArray = (value: unknown): string[] => {
-  if (typeof value === "string") return [value];
+  if (typeof value === 'string') return [value];
   if (Array.isArray(value)) return value.flatMap(extractTextArray);
-  if (value && typeof value === "object")
+  if (value && typeof value === 'object')
     return Object.values(value).flatMap(extractTextArray);
   return [];
 };
@@ -73,19 +73,19 @@ const buildIndex = (
   const formTokens = extractTextArray(entry.forms)
     .map((val) => normalizeText(val))
     .filter(Boolean);
-  const normalizedForms = formTokens.join(" ");
+  const normalizedForms = formTokens.join(' ');
   return {
     ...entry,
     index,
     normalizedWord: normalizeText(entry.word),
-    normalizedDefs: normalizeText(entry.defs?.join(" ") ?? ""),
+    normalizedDefs: normalizeText(entry.defs?.join(' ') ?? ''),
     normalizedForms,
     normalizedFormTokens: formTokens,
   };
 };
 
 export const App: React.FC = () => {
-  const [q, setQ] = useQueryState("q", { defaultValue: "" });
+  const [q, setQ] = useQueryState('q', { defaultValue: '' });
   const deferredQ = useDeferredValue(q);
 
   const [words, setWords] = useState<DictionaryEntry[]>([]);
@@ -97,16 +97,16 @@ export const App: React.FC = () => {
   // Sync dark theme directly to documentElement (html)
   useEffect(() => {
     const syncTheme = () => {
-      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      document.documentElement.classList.remove("theme-light", "theme-dark");
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.classList.remove('theme-light', 'theme-dark');
       document.documentElement.classList.add(
-        isDark ? "theme-dark" : "theme-light",
+        isDark ? 'theme-dark' : 'theme-light',
       );
     };
     syncTheme();
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    media.addEventListener("change", syncTheme);
-    return () => media.removeEventListener("change", syncTheme);
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    media.addEventListener('change', syncTheme);
+    return () => media.removeEventListener('change', syncTheme);
   }, []);
 
   // Fetch data on mount
@@ -116,12 +116,12 @@ export const App: React.FC = () => {
         setLoading(true);
         // fetch relative to host from workspace root
         const [wordsRes, aspectRes] = await Promise.all([
-          fetch("/words.json"),
-          fetch("/verb_aspect_mapping.json"),
+          fetch('/words.json'),
+          fetch('/verb_aspect_mapping.json'),
         ]);
 
         if (!wordsRes.ok || !aspectRes.ok) {
-          throw new Error("Failed to load dictionary data files");
+          throw new Error('Failed to load dictionary data files');
         }
 
         const rawWords = (await wordsRes.json()) as RawDictionaryEntry[];
@@ -147,7 +147,7 @@ export const App: React.FC = () => {
 
   // Reset page when search query changes by updating page from the interaction handlers.
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [deferredQ]);
 
   // Handle word selection (Counterparts, Wiktionary, etc.)
@@ -217,13 +217,13 @@ export const App: React.FC = () => {
 
   // Render status bar message
   const summaryMessage = useMemo(() => {
-    if (loading) return "Loading dictionary...";
-    if (error) return "Failed to load data.";
-    if (sortedWords.length === 0) return "No entries match your search.";
+    if (loading) return 'Loading dictionary...';
+    if (error) return 'Failed to load data.';
+    if (sortedWords.length === 0) return 'No entries match your search.';
 
     const shown = Math.min(sortedWords.length, currentPage * RESULTS_PER_PAGE);
     const total = sortedWords.length;
-    const plural = total === 1 ? "entry" : "entries";
+    const plural = total === 1 ? 'entry' : 'entries';
     return `Showing ${shown} of ${total} ${plural}.`;
   }, [loading, error, sortedWords, currentPage]);
 
@@ -261,20 +261,20 @@ export const App: React.FC = () => {
             <div
               className="row"
               style={{
-                display: "flex",
-                justifyContent: "center",
-                padding: "2rem",
+                display: 'flex',
+                justifyContent: 'center',
+                padding: '2rem',
               }}
             >
-              <p style={{ color: "var(--muted)", fontWeight: 600 }}>
+              <p style={{ color: 'var(--muted)', fontWeight: 600 }}>
                 Loading dictionary data...
               </p>
             </div>
           )}
 
           {error && (
-            <div className="row" style={{ borderColor: "var(--stress)" }}>
-              <p style={{ color: "var(--stress)", margin: 0 }}>
+            <div className="row" style={{ borderColor: 'var(--stress)' }}>
+              <p style={{ color: 'var(--stress)', margin: 0 }}>
                 Unable to load dictionary data: {error}
               </p>
             </div>
@@ -303,16 +303,16 @@ export const App: React.FC = () => {
                   type="button"
                   onClick={() => handleSelectWord(fallbackResult.query)}
                   className="button button--secondary"
-                  style={{ marginTop: "0.75rem", width: "fit-content" }}
+                  style={{ marginTop: '0.75rem', width: 'fit-content' }}
                 >
                   Search '{fallbackResult.query}' instead? (
                   {fallbackResult.count} results)
                 </button>
               )}
               {q && (
-                <p style={{ marginTop: "0.75rem", marginBottom: 0 }}>
+                <p style={{ marginTop: '0.75rem', marginBottom: 0 }}>
                   <a
-                    href={`https://en.wiktionary.org/wiki/${encodeURIComponent(q.replaceAll("\u0301", "").trim())}#Ukrainian`}
+                    href={`https://en.wiktionary.org/wiki/${encodeURIComponent(q.replaceAll('\u0301', '').trim())}#Ukrainian`}
                     className="wiktionary-link"
                     target="_blank"
                     rel="noopener noreferrer"

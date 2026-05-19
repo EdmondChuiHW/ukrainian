@@ -14,5 +14,5 @@ createRoot(rootElement).render(
     <NuqsAdapter>
       <App />
     </NuqsAdapter>
-  </StrictMode>
+  </StrictMode>,
 );
