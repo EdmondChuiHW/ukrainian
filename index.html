@@ -3,81 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dictionary of the Ukrainian Language</title>
-    <link rel="icon" type="image/png" href="favicon.ico" />
-    <link rel="stylesheet" href="index.css" />
-    <script defer src="index.js" charset="utf-8"></script>
+    <title>Dictionary of the Ukrainian Language (React)</title>
+    <link rel="icon" type="image/png" href="/favicon.ico" />
   </head>
   <body>
-    <header class="topbar">
-      <p class="brand__title">
-        <span class="brand__title-line brand__title-line--blue">Ukrainian</span>
-        <span class="brand__title-line brand__title-line--yellow"
-          >Dictionary</span
-        >
-      </p>
-
-      <form id="toolbar" class="toolbar">
-        <div class="toolbar-field">
-          <input
-            id="search"
-            name="search"
-            type="text"
-            placeholder="Search for a word or phrase"
-            autocomplete="off"
-            aria-label="Search"
-          />
-        </div>
-
-        <div class="toolbar-actions">
-          <button type="button" id="paste" class="button button--secondary">
-            Paste
-          </button>
-          <button type="button" id="clear" class="button button--secondary">
-            Clear
-          </button>
-        </div>
-      </form>
-    </header>
-
-    <main class="main-content">
-      <div class="list-status" aria-live="polite">
-        <p id="resultCount">
-          Use search, sort, and filter to explore the dictionary.
-        </p>
-      </div>
-
-      <div class="toolbar-field">
-        <select id="sort" name="sort" aria-label="Sort">
-          <option value="freq">Frequency</option>
-          <option value="alpha">Alphabetic (А-Я)</option>
-          <option value="alpha_rev">Alphabetic (Я-А)</option>
-        </select>
-      </div>
-
-      <div class="toolbar-field">
-        <select id="filter" name="filter" aria-label="Filter">
-          <option value="">All parts of speech</option>
-          <option value="adjective">Adjectives</option>
-          <option value="adverb">Adverbs</option>
-          <option value="noun">Nouns</option>
-          <option value="numeral">Numerals</option>
-          <option value="particle">Particles</option>
-          <option value="phrase">Phrases</option>
-          <option value="pronoun">Pronouns</option>
-          <option value="proverb">Proverbs</option>
-          <option value="symbol">Symbols</option>
-          <option value="verb">Verbs</option>
-        </select>
-      </div>
-      <section
-        class="dictionary-list main"
-        aria-label="Dictionary entries"
-      ></section>
-    </main>
-
-    <footer class="bottom-bar">
-      <p></p>
-    </footer>
+    <div id="root"></div>
+    <script type="module" src="/react/main.tsx"></script>
   </body>
 </html>

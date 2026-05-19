@@ -116,8 +116,8 @@ export const App: React.FC = () => {
         setLoading(true);
         // fetch relative to host from workspace root
         const [wordsRes, aspectRes] = await Promise.all([
-          fetch("../words.json"),
-          fetch("../verb_aspect_mapping.json"),
+          fetch("/words.json"),
+          fetch("/verb_aspect_mapping.json"),
         ]);
 
         if (!wordsRes.ok || !aspectRes.ok) {

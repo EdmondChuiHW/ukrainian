@@ -21,10 +21,10 @@ export default defineConfig({
     open: false,
   },
   build: {
-    outDir: "dist/react",
+    outDir: "dist/",
     rollupOptions: {
       input: {
-        main: "./react/index.html",
+        main: "index.html",
       },
     },
   },
