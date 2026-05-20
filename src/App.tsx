@@ -147,8 +147,16 @@ export const App: React.FC = () => {
 
   // Reset page when search query changes by updating page from the interaction handlers.
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  }, [deferredQ]);
+    const onMessage = (ev: MessageEvent<{ q: string }>): void => {
+      if (!ev.data?.q) return;
+      if (ev.source !== window.opener) return;
+
+      setQ(ev.data.q);
+    };
+    window.addEventListener('message', onMessage);
+
+    return () => window.removeEventListener('message', onMessage);
+  }, [setQ]);
 
   // Handle word selection (Counterparts, Wiktionary, etc.)
   const handleSelectWord = useCallback(
