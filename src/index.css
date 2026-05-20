@@ -209,7 +209,7 @@ button {
 }
 
 .list-status {
-  padding: 0 1rem 0.75rem;
+  padding: 0 0 0.75rem;
   color: var(--muted);
   font-size: 0.95rem;
 }
@@ -222,12 +222,12 @@ button {
   flex: 1;
   width: min(1200px, 100%);
   margin: 0 auto;
-  padding: 1rem;
+  padding: 1rem 0.75rem;
 }
 
 .dictionary-list {
   display: grid;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .main .row {
@@ -240,11 +240,12 @@ button {
   gap: 1rem;
   align-items: start;
   align-content: start;
-  padding: 1rem;
-  border-radius: 1rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.main .row:last-child {
+  border-bottom: none;
 }
 
 .main .row > .entry-word-column {
@@ -462,6 +463,12 @@ button {
   color: inherit;
   padding: 0;
   padding-block: 0.15rem;
+  border-radius: 0.15rem;
+}
+
+::highlight(search) {
+  background: rgba(93, 144, 255, 0.35);
+  color: inherit;
   border-radius: 0.15rem;
 }
 
