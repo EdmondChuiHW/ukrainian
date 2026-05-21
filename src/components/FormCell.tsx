@@ -1,9 +1,9 @@
 import React from 'react';
-import HighlightedText from './HighlightedText';
+import MatchAndStressText from './MatchAndStressText';
 import { hasExactCellMatch } from './utils';
 
 interface FormCellProps {
-  value: any;
+  value: string | string[];
   tooltip?: string;
   query: string;
 }
@@ -31,12 +31,12 @@ export const FormCell: React.FC<FormCellProps> = ({
     if (Array.isArray(value)) {
       return value.map((item, idx) => (
         <React.Fragment key={`cell-item-${idx}`}>
-          <HighlightedText text={item} query={query} />
+          <MatchAndStressText text={item} matchTerm={query} />
           {idx < value.length - 1 && <br />}
         </React.Fragment>
       ));
     }
-    return <HighlightedText text={value} query={query} />;
+    return <MatchAndStressText text={value} matchTerm={query} />;
   };
 
   return (

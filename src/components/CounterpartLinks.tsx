@@ -1,17 +1,18 @@
 import React, { useMemo } from 'react';
-import StressText from './StressText';
+import MatchAndStressText from './MatchAndStressText';
+import { ACCENT_MARK } from './utils';
 
 interface CounterpartLinksProps {
   entry: any;
   verbAspectMap: any;
   words: any[];
   onSelectWord: (word: string) => void;
+  query: string;
 }
 
 export const CounterpartLinks: React.FC<CounterpartLinksProps> = React.memo(
-  ({ entry, verbAspectMap, words, onSelectWord }) => {
+  ({ entry, verbAspectMap, words, onSelectWord, query }) => {
     const isVerb = entry.pos === 'verb';
-    if (!isVerb) return null;
 
     const counterparts = useMemo(() => {
       const rawAspectIds = verbAspectMap[entry.index.toString()];
@@ -23,6 +24,7 @@ export const CounterpartLinks: React.FC<CounterpartLinksProps> = React.memo(
       return aspectIds.map((idx) => words[idx]).filter(Boolean);
     }, [entry.index, verbAspectMap, words]);
 
+    if (!isVerb) return null;
     if (counterparts.length === 0) return null;
 
     const renderAspectLabel = () => {
@@ -42,28 +44,25 @@ export const CounterpartLinks: React.FC<CounterpartLinksProps> = React.memo(
     return (
       <p style={{ marginTop: '1rem', marginBottom: 0 }}>
         {renderAspectLabel()}
-        {counterparts.map((cp, idx) => (
-          <React.Fragment key={cp.index}>
-            <button
-              type="button"
-              onClick={() => onSelectWord(cp.word)}
-              className="counterpart-link"
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                color: 'var(--accent)',
-                cursor: 'pointer',
-                font: 'inherit',
-                textDecoration: 'underline',
-                fontWeight: 700,
-              }}
-            >
-              <StressText text={cp.word} />
-            </button>
-            {idx < counterparts.length - 1 && ', '}
-          </React.Fragment>
-        ))}
+        {counterparts.map((cp, idx) => {
+          const noAccentWord = cp.word.replaceAll(ACCENT_MARK, '');
+          return (
+            <React.Fragment key={cp.index}>
+              <a
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onSelectWord(noAccentWord);
+                }}
+                className="counterpart-link"
+                href={`/?q=${encodeURIComponent(noAccentWord)}`}
+              >
+                <MatchAndStressText text={cp.word} matchTerm={query} />
+              </a>
+              {idx < counterparts.length - 1 && ', '}
+            </React.Fragment>
+          );
+        })}
       </p>
     );
   },

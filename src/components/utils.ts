@@ -72,3 +72,10 @@ export const humanizeKey = (key: string): string => {
     .replace(/\b\w/g, (char) => char.toUpperCase())
     .replace(/\s+/g, ' ');
 };
+
+export function getHighlight(name: string): Highlight {
+  return (
+    CSS.highlights.get(name) ??
+    CSS.highlights.set(name, new Highlight()).get(name)!
+  );
+}

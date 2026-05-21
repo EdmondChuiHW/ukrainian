@@ -1,6 +1,6 @@
 import React from 'react';
 import FormCell from './FormCell';
-import HighlightedText from './HighlightedText';
+import MatchAndStressText from './MatchAndStressText';
 import { humanizeKey } from './utils';
 
 const CATEGORIES = [
@@ -93,12 +93,15 @@ export const AdjectiveTable: React.FC<AdjectiveTableProps> = ({
                 {Array.isArray(addlValue) ? (
                   addlValue.map((item: any, idx: number) => (
                     <React.Fragment key={idx}>
-                      <HighlightedText text={item} query={query} />
+                      <MatchAndStressText text={item} matchTerm={query} />
                       {idx < addlValue.length - 1 && <br />}
                     </React.Fragment>
                   ))
                 ) : (
-                  <HighlightedText text={addlValue as string} query={query} />
+                  <MatchAndStressText
+                    text={addlValue as string}
+                    matchTerm={query}
+                  />
                 )}
               </td>
             </tr>

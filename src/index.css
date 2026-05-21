@@ -450,7 +450,7 @@ button {
   padding: 1rem 0;
 }
 
-.stress {
+::highlight(stress) {
   color: var(--stress);
   text-decoration: underline;
   text-decoration-color: var(--accent-strong);
@@ -458,7 +458,7 @@ button {
   text-underline-offset: 3px;
 }
 
-.match {
+::highlight(search-match) {
   background: rgba(93, 144, 255, 0.35);
   color: inherit;
   padding: 0;
@@ -466,17 +466,11 @@ button {
   border-radius: 0.15rem;
 }
 
-::highlight(search) {
-  background: rgba(93, 144, 255, 0.35);
-  color: inherit;
-  border-radius: 0.15rem;
-}
-
 .cell-exact {
   background-color: rgba(255, 210, 77, 0.8);
 }
 
-.cell-exact .match {
+.cell-exact ::highlight(search-match) {
   background: #28437c;
   color: #ffffff;
 }

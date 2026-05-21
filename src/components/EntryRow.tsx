@@ -1,5 +1,5 @@
 import React from 'react';
-import HighlightedText from './HighlightedText';
+import MatchAndStressText from './MatchAndStressText';
 import CounterpartLinks from './CounterpartLinks';
 import FormsTable from './FormsTable';
 
@@ -25,7 +25,7 @@ export const EntryRow: React.FC<EntryRowProps> = React.memo(
         <div className="col entry-word-column">
           <div className="title-container">
             <h2 className="title">
-              <HighlightedText text={entry.word} query={query} />
+              <MatchAndStressText text={entry.word} matchTerm={query} />
             </h2>
             <span className="subtitle">
               {entry.pos}
@@ -37,7 +37,7 @@ export const EntryRow: React.FC<EntryRowProps> = React.memo(
             <ol className="entry-list">
               {entry.defs.map((def: string, idx: number) => (
                 <li key={idx}>
-                  <HighlightedText text={def} query={query} />
+                  <MatchAndStressText text={def} matchTerm={query} />
                 </li>
               ))}
             </ol>
@@ -48,6 +48,7 @@ export const EntryRow: React.FC<EntryRowProps> = React.memo(
             verbAspectMap={verbAspectMap}
             words={words}
             onSelectWord={onSelectWord}
+            query={query}
           />
         </div>
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import FormCell from './FormCell';
-import HighlightedText from './HighlightedText';
+import MatchAndStressText from './MatchAndStressText';
 import { getCellText, humanizeKey } from './utils';
 
 const TOOLTIPS: { [key: string]: string } = {
@@ -99,12 +99,15 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               {Array.isArray(forms.inf) ? (
                 forms.inf.map((item: string, idx: number) => (
                   <React.Fragment key={idx}>
-                    <HighlightedText text={item} query={query} />
+                    <MatchAndStressText text={item} matchTerm={query} />
                     {idx < forms.inf.length - 1 && ', '}
                   </React.Fragment>
                 ))
               ) : (
-                <HighlightedText text={forms.inf as string} query={query} />
+                <MatchAndStressText
+                  text={forms.inf as string}
+                  matchTerm={query}
+                />
               )}
             </td>
           </tr>
@@ -180,12 +183,15 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                     {Array.isArray(ppValue) ? (
                       ppValue.map((item: any, idx: number) => (
                         <React.Fragment key={idx}>
-                          <HighlightedText text={item} query={query} />
+                          <MatchAndStressText text={item} matchTerm={query} />
                           {idx < ppValue.length - 1 && <br />}
                         </React.Fragment>
                       ))
                     ) : (
-                      <HighlightedText text={ppValue as string} query={query} />
+                      <MatchAndStressText
+                        text={ppValue as string}
+                        matchTerm={query}
+                      />
                     )}
                   </td>
                 </tr>
@@ -265,12 +271,15 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                     {Array.isArray(ppValue) ? (
                       ppValue.map((item: any, idx: number) => (
                         <React.Fragment key={idx}>
-                          <HighlightedText text={item} query={query} />
+                          <MatchAndStressText text={item} matchTerm={query} />
                           {idx < ppValue.length - 1 && <br />}
                         </React.Fragment>
                       ))
                     ) : (
-                      <HighlightedText text={ppValue as string} query={query} />
+                      <MatchAndStressText
+                        text={ppValue as string}
+                        matchTerm={query}
+                      />
                     )}
                   </td>
                 </tr>
@@ -350,12 +359,15 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                     {Array.isArray(ppValue) ? (
                       ppValue.map((item: any, idx: number) => (
                         <React.Fragment key={idx}>
-                          <HighlightedText text={item} query={query} />
+                          <MatchAndStressText text={item} matchTerm={query} />
                           {idx < ppValue.length - 1 && <br />}
                         </React.Fragment>
                       ))
                     ) : (
-                      <HighlightedText text={ppValue as string} query={query} />
+                      <MatchAndStressText
+                        text={ppValue as string}
+                        matchTerm={query}
+                      />
                     )}
                   </td>
                 </tr>

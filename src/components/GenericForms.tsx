@@ -1,5 +1,5 @@
 import React from 'react';
-import HighlightedText from './HighlightedText';
+import MatchAndStressText from './MatchAndStressText';
 import { humanizeKey } from './utils';
 
 interface GenericFormsProps {
@@ -16,7 +16,7 @@ export const FormValue: React.FC<{ value: any; query: string }> = ({
       <div className="form-values">
         {value.map((item, idx) => (
           <p key={idx}>
-            <HighlightedText text={item} query={query} />
+            <MatchAndStressText text={item} matchTerm={query} />
           </p>
         ))}
       </div>
@@ -38,7 +38,7 @@ export const FormValue: React.FC<{ value: any; query: string }> = ({
 
   return (
     <p>
-      <HighlightedText text={value ?? ''} query={query} />
+      <MatchAndStressText text={value ?? ''} matchTerm={query} />
     </p>
   );
 };
