@@ -1,9 +1,13 @@
+import os
 import json
 import re
 from copy import deepcopy
 from collections import defaultdict
 
 import extract
+
+DATA_DIR = os.environ.get('DATA_DIR', 'data')
+os.makedirs(DATA_DIR, exist_ok=True)
 
 cyrillic = "ЄІЇАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюяєії"
 
@@ -279,7 +283,26 @@ class Usage:
 			forms = self.forms[form_id].forms
 			if final_forms:
 				forms = self.forms[form_id].get_final_forms()
-			results = {**results, **forms}
+			
+			def merge_structures(d1, d2):
+				res = dict(d1)
+				for k, v in d2.items():
+					if k in res:
+						if isinstance(res[k], list) and isinstance(v, list):
+							merged = list(res[k])
+							for item in v:
+								if item not in merged:
+									merged.append(item)
+							res[k] = merged
+						elif isinstance(res[k], dict) and isinstance(v, dict):
+							res[k] = merge_structures(res[k], v)
+						else:
+							res[k] = v
+					else:
+						res[k] = v
+				return res
+
+			results = merge_structures(results, forms)
 		return results
 
 	def get_definition_words(self):
@@ -452,15 +475,14 @@ class Word:
 				del self.usages[pos]
 
 	def add_frequencies(self, frequencies):
+		normalized_freqs = {}
 		if frequencies:
-			for pos in list(frequencies.keys()):
-				frequencies[Word.replace_pos(pos)] = frequencies[pos]
+			for pos, rank in frequencies.items():
+				normalized_freqs[Word.replace_pos(pos)] = rank
+				
 		for pos, usage in self.usages.items():
-			if frequencies:
-				if pos in frequencies:
-					usage.add_frequency(frequencies[pos])
-				else:
-					usage.add_frequency(None)
+			if normalized_freqs and pos in normalized_freqs:
+				usage.add_frequency(normalized_freqs[pos])
 			else:
 				usage.add_frequency(None)
 
@@ -512,11 +534,21 @@ class Dictionary:
 
 	def _handle_no_accent(self, to_add, no_accent):
 		if no_accent == to_add.word:
-			# very easy, we just merge this in with the other one
-			self.dict[
-				list(self.accentless_words[no_accent])[0]
-			].merge(to_add)
+			# Only merge if we find an exact matching key in the dictionary
+			existing_keys = list(self.accentless_words[no_accent])
+			exact_match = None
+			for k in existing_keys:
+				if k == to_add.word:
+					exact_match = k
+					break
+			if exact_match:
+				self.dict[exact_match].merge(to_add)
+			else:
+				# Keep it distinct and write to its own spelling key
+				self.dict[to_add.word] = to_add
+				self.accentless_words[no_accent].add(to_add.word)
 		else:
+			# Stressed word replacing/migrating unstressed placeholder
 			added_flag = False
 			for e in list(self.accentless_words[no_accent]):
 				existant_word = self.dict[e]
@@ -530,8 +562,9 @@ class Dictionary:
 					self.dict[to_add.word] = to_add	
 					self.accentless_words[no_accent].add(to_add.word)
 					added_flag = True
-			if not added_flag:  # they are different words
+			if not added_flag:
 				self.dict[to_add.word] = to_add
+				self.accentless_words[no_accent].add(to_add.word)
 
 	def _add_word_to_dictionary(self, to_add):
 		if to_add.word in self.dict:
@@ -553,23 +586,13 @@ class Dictionary:
 
 	def add_wiktionary_words(self):
 		print("adding wiktionary words")
-		print('extracting lemmas')
-		words = extract.get_lemmas()
-		print('done extracting lemmas')
-		n = len(words)
-		print('parsing wiktionary data')
+		print('parsing wiktionary data from jsonl')
 		try:
-			for i, w in enumerate(words):
-				if i % 100 == 0:
-					print(f"{i} of {n}")
-				result = extract.get_wiktionary_word(w)
-				if result:
-					for r in result:
-						self.add_to_dictionary(r)
+			words = extract.load_wiktionary_jsonl()
+			for w in words:
+				self.add_to_dictionary(w)
 		except Exception as e:
 			raise e
-		finally:
-			extract.dump_wiktionary_cache()
 		print('done parsing wiktionary data')
 		self.clean_alerted_words()
 		self.garbage_collect()
@@ -664,7 +687,7 @@ class Dictionary:
 		for i in word_part:
 			word_part[i] = list(word_part[i])
 
-		with open(f'data/{loc1}', 'w+', encoding='utf-8') as f:
+		with open(os.path.join(DATA_DIR, loc1), 'w+', encoding='utf-8') as f:
 			if indent:
 				f.write(
 					json.dumps(word_index_list, indent=indent, ensure_ascii=False)
@@ -674,7 +697,7 @@ class Dictionary:
 					json.dumps(word_index_list, ensure_ascii=False)
 				)
 
-		with open(f'data/{loc2}', 'w+', encoding='utf-8') as f:
+		with open(os.path.join(DATA_DIR, loc2), 'w+', encoding='utf-8') as f:
 			if indent:
 				f.write(
 					json.dumps(word_part, indent=indent, ensure_ascii=False)
@@ -690,7 +713,7 @@ class Dictionary:
 		else:
 			data = self.get_dict()
 
-		with open(f'data/{loc}', 'w+', encoding='utf-8') as f:
+		with open(os.path.join(DATA_DIR, loc), 'w+', encoding='utf-8') as f:
 			if indent:
 				f.write(
 					json.dumps(data, indent=indent, ensure_ascii=False)

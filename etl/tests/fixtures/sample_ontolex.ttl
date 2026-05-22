@@ -1,0 +1,31 @@
+# Prefix declarations
+@prefix dbnary: <http://kaiko.getalp.org/dbnary#> .
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix lexvo:  <http://lexvo.org/id/iso639-3/> .
+@prefix eng:    <http://kaiko.getalp.org/dbnary/eng/> .
+
+eng:__en_gloss_12345_mati__Noun__1
+        rdf:type     dbnary:Gloss;
+        rdf:value    "female parent"@en;
+        dbnary:rank  "1"^^xs:int .
+
+eng:__tr_ukr_1_mati__Noun__1
+        rdf:type                dbnary:Translation;
+        dbnary:gloss            eng:__en_gloss_12345_mati__Noun__1;
+        dbnary:isTranslationOf  eng:mati__Noun__1;
+        dbnary:targetLanguage   lexvo:ukr;
+        dbnary:usage            "f";
+        dbnary:writtenForm      "ма́ти"@uk .
+
+eng:__en_gloss_67890_have__Verb__1
+        rdf:type     dbnary:Gloss;
+        rdf:value    "to possess"@en;
+        dbnary:rank  "1"^^xs:int .
+
+eng:__tr_ukr_1_have__Verb__1
+        rdf:type                dbnary:Translation;
+        dbnary:gloss            eng:__en_gloss_67890_have__Verb__1;
+        dbnary:isTranslationOf  eng:have__Verb__1;
+        dbnary:targetLanguage   lexvo:ukr;
+        dbnary:writtenForm      "ма́ти"@uk .

@@ -1,186 +1,72 @@
 import bz2
 import os
-import requests
 import json
-from urllib import parse
+import multiprocessing
 from collections import defaultdict
 from copy import deepcopy
-from bs4 import BeautifulSoup, NavigableString
 
 from dictionary import Word, cyrillic
 
-os.makedirs('data', exist_ok=True)
+# Resolve paths relative to this module, not CWD
+_ETL_DIR = os.path.dirname(os.path.abspath(__file__))
 
-session = requests.session()
+DATA_DIR = os.environ.get('DATA_DIR', 'data')
+os.makedirs(DATA_DIR, exist_ok=True)
 
-try:
-	with open('data/wiktionary_raw_data.json', 'r', encoding='utf-8') as f:
-		wiktionary_cache = json.loads(f.read())
-except:  # does not exist yet
-	wiktionary_cache = {}
+# Caches are deprecated in offline mode
+wiktionary_cache = {}
+inflection_cache = {}
+
+# Dummy viewstate values to avoid live connection on import
+vs, vsg, ev = None, None, None
 
 def get_viewstate(bs=None):
-	if bs is None:
-		url = "https://lcorp.ulif.org.ua/dictua/dictua.aspx"
-		req = session.get(url)
-		data = req.text
-		bs = BeautifulSoup(data, features='lxml')
-	return (
-		bs.find("input", {"id": "__VIEWSTATE"}).attrs['value'],
-		bs.find("input", {"id": "__VIEWSTATEGENERATOR"}).attrs['value'],
-		bs.find("input", {"id": "__EVENTVALIDATION"}).attrs['value'],
-	)
-
-vs, vsg, ev = get_viewstate()
-
-try:
-	with open('data/inflection_raw_data.json', 'r', encoding='utf-8') as f:
-		inflection_cache = json.loads(f.read())
-except:
-	inflection_cache = {}
-
+	return None, None, None
 
 def get_ontolex(use_cache=True):
-	if use_cache and os.path.exists('data/raw_dbnary_dump.ttl'):
+	raw_dbnary_path = os.environ.get('RAW_DBNARY_PATH', os.path.join(DATA_DIR, 'raw_dbnary_dump.ttl'))
+	if use_cache and os.path.exists(raw_dbnary_path):
 		return
-	print('downloading latest ontolex data from dbnary')
-	with session.get('http://kaiko.getalp.org/static/ontolex/latest/en_dbnary_ontolex.ttl.bz2', stream=True) as f:
-		data = bz2.BZ2File(f.raw).read()
-	print('decompressing')
-	with open('data/raw_dbnary_dump.ttl', 'wb+') as f:
-		f.write(data)
-	print('decompressing finished')
+	# Offline fallback
+	if not os.path.exists(raw_dbnary_path):
+		print(f"Warning: raw_dbnary_dump.ttl not found at {raw_dbnary_path}.")
 
+
+# Lazy-loaded offline database
+_wiktionary_database = None
+
+def _ensure_wiktionary_loaded():
+	global _wiktionary_database
+	if _wiktionary_database is None:
+		_wiktionary_database = load_wiktionary_jsonl()
 
 def get_lemmas():
-	def add_words(words, results):
-		for word in results['query']['categorymembers']:
-			title = word['title']
-			if 'Category' not in title:
-				words.append(title)
-
-	words = []
-
-	results = session.get('https://en.wiktionary.org/w/api.php?action=query&list=categorymembers&cmtitle=Category:Ukrainian_lemmas&format=json&cmlimit=max').json()
-	add_words(words, results)
-
-	while 'continue' in results:
-		cmcontinue = results['continue']['cmcontinue']
-		results = session.get(f'https://en.wiktionary.org/w/api.php?action=query&list=categorymembers&cmtitle=Category:Ukrainian_lemmas&format=json&cmlimit=max&cmcontinue={cmcontinue}').json()
-		add_words(words, results)
-	
-	return words
-
+	_ensure_wiktionary_loaded()
+	return list(set(w.word for w in _wiktionary_database))
 
 def get_wiktionary_word(word, use_cache=True):
-	if word in wiktionary_cache and use_cache:
-		article = wiktionary_cache[word]
-	else:
-		article = session.get(
-			f'https://en.wiktionary.org/w/api.php?action=parse&page={word}&prop=text&formatversion=2&format=json'
-		).json()['parse']['text']
-		wiktionary_cache[word] = article
-	article = BeautifulSoup(article, 'lxml')
-
-	def clean_tag(tag):
-		res = ''
-		for child in tag.contents:
-			if isinstance(child, NavigableString):
-				res += str(child)
-			elif child.name in ('sup', 'sub'):
-				res += str(child)
-			elif child.name in ('ol', 'ul'):
-				None  # in this house we say NO to recursion
-			elif child.name in ('li'):
-				res += clean_tag(child) + ','
-			else:
-				res += clean_tag(child)
-		return res
-
+	_ensure_wiktionary_loaded()
 	results = []
-
-	word_name = article.find_all('strong', {'class': 'Cyrl headword'}, lang='uk')
-	for word_pointer in word_name[::-1]:
-		bad_stuff = word_pointer.find_all(class_='reference')
-		for bs in bad_stuff:
-			bs.decompose()
-		accented_name = word_pointer.text.strip()  # name
-		word_info = word_pointer.parent.find('span', {'class': 'gender'})
-		if word_info is not None:
-			word_info = word_info.extract().text.strip()
-		more_adj_forms = get_additional_adjectival_forms(word_pointer.parent.text)
-		w = Word(accented_name)
-		pos_pointer = word_pointer.find_previous(['h3', 'h4'])
-		pos = pos_pointer.span.text.lower()
-		def_pointer = word_pointer.find_next('ol')
-		if not def_pointer:
-			return
-		ds = def_pointer.find_all('li')
-		bad_stuff = def_pointer.find_all('span', class_='HQToggle') \
-			+ def_pointer.find_all('abbr') \
-			+ def_pointer.find_all('ul') \
-			+ def_pointer.find_all(lang='uk-Latn') \
-			+ def_pointer.find_all(class_='mention-gloss-paren annotation-paren') \
-			+ def_pointer.find_all(class_='mention-gloss-double-quote') \
-			+ def_pointer.find_all(class_='nyms synonym') \
-			+ def_pointer.find_all(class_='citation-whole') \
-			+ def_pointer.find_all(class_='plainlinks')
-		for bs in bad_stuff:
-			bs.decompose()
-		for d in ds:	
-			glosses = [g.extract().text.strip() for g in d.find_all(class_='mention-gloss')]
-			if d.dl:
-				d.dl.decompose()
-			d = clean_tag(d)
-			d = ' '.join(d.split())
-			d = d.replace(' ,', ',')
-			d = d.replace(' .', '.')
-			d = d.replace(' :', ':')
-			d = d.replace(' :', ':')
-			d = d.replace(',:', ':')
-			d = d.rstrip(',.:').strip()
-			if len(d) > 0:
-				w.add_definition(pos, d)
-				w.add_info(Word.replace_pos(pos), word_info)
-			if len(glosses) > 0:
-				for g in glosses:
-					w.add_definition(pos, g)
-					w.add_info(Word.replace_pos(pos), word_info)
-		inflection_pointer = word_pointer.parent
-		if pos != 'verb':
-			inflection_pointer = inflection_pointer.find_next('span', text='Declension')
-		else:
-			inflection_pointer = inflection_pointer.find_next('span', text='Conjugation')
-		table = None
-		if inflection_pointer is not None:
-			table = inflection_pointer.find_next('table', {'class': 'inflection-table'}) 
-		if table is None and inflection_pointer is not None:
-			table = inflection_pointer.find_next('table', {'class': 'inflection-table inflection inflection-uk inflection-verb'})
-		if table and len(w.usages.keys()) > 0:
-			forms, form_type = parse_wiktionary_table(accented_name, table) 
-			if form_type == 'adj' and more_adj_forms:
-				forms = {**forms, **more_adj_forms}
-			w.add_forms(Word.replace_pos(pos), forms, form_type)
-			table.extract()
-		results.append(w)
+	for w in _wiktionary_database:
+		if w.word == word or w.get_word_no_accent() == word.replace("́", ""):
+			results.append(w)
 	return results
 
-
 def get_additional_adjectival_forms(text):
-
+	# Corrected adjectival prefix extraction logic
 	def get_word(word):
 		prefix = ''
 		rest = ''
 		parenthesis = 0
 		for i in word:
 			if i == '(':
-				parenthesis -= 1
-			if parenthesis > 0:
-				prefix += 0
-			elif i not in ('(', ')'):
-				rest += i
-			if i == ')':
 				parenthesis += 1
+			elif i == ')':
+				parenthesis -= 1
+			elif parenthesis > 0:
+				prefix += i
+			else:
+				rest += i
 		return [rest] if len(prefix) == 0 else [rest, prefix + rest]
 				
 	last_parenthesis = ''
@@ -203,7 +89,7 @@ def get_additional_adjectival_forms(text):
 		'adverb': 'addl adv'
 	}
 	for form in lists:
-		if form[0] in abbrevs.keys():
+		if form and form[0] in abbrevs.keys():
 			if len(form) == 2:
 				results[abbrevs[form[0]]] = get_word(form[1])
 			elif len(form) == 4:
@@ -212,322 +98,37 @@ def get_additional_adjectival_forms(text):
 
 
 def parse_wiktionary_table(w, inflections):
-
-	def parse_verb(items):
-		forms = defaultdict(lambda: [])
-		for span in items:
-			tense, number, gender, person, participle = None, None, None, None, None
-			tense_info = span['class'][3].replace('-form-of', '').split('|')
-			for t in tense_info:
-				if t in ('inf', 'pres', 'past', 'fut', 'imp'):
-					tense = t
-				if t in ('m', 'f', 'n'):
-					gender = t
-				if t in ('1', '2', '3'):
-					person = t
-				if t in ('s', 'p'):
-					number = t
-				if t in ('impers', 'act', 'pass', 'adv') and participle is None:
-					participle = {'impers': 'imp', 'act': 'act', 'pass': 'pas', 'adv': 'adv'}[t]
-			if tense == 'inf':
-				form = tense
-			elif participle is not None:
-				form = f"{tense} {participle} pp"
-			elif tense in ('pres', 'fut', 'imp'):
-				form = f'{tense} {person}{number}'
-			elif tense == 'past':
-				if number == 's':
-					form = f'past {gender}s'
-				else:
-					form = 'past p'
-			forms[form].append(span.text.strip())
-		forms = dict(forms)
-		return forms
-
-	def parse_noun(items):
-		forms = defaultdict(lambda: [])
-		for span in items:
-			case_info = span['class'][3].replace('-form-of', '').split('|')
-			forms[f"{case_info[0]} n{case_info[1]}"].append(span.text.strip())
-		forms = dict(forms)
-		return forms
-
-	def parse_adj(items):
-		forms = defaultdict(lambda: [])
-		for span in items:
-			case_info = span['class'][3].replace('-form-of', '').split('|')
-			if case_info[0] in ('an', 'in'):
-				case_info = case_info[1:]
-			if case_info[1] == 'p':
-				form = f"{case_info[0]} ap"
-				forms[form].append(span.text.strip())
-			elif case_info[1] == 'm//n':
-				form = f"{case_info[0]} am"
-				forms[form].append(span.text.strip())
-				form = f"{case_info[0]} an"
-				forms[form].append(span.text.strip())
-			elif case_info[1] == 'm':
-				form = f"{case_info[0]} am"
-				forms[form].append(span.text.strip())
-			elif case_info[1] == 'n':
-				form = f"{case_info[0]} an"
-				forms[form].append(span.text.strip())
-			else:
-				form = f"{case_info[0]} af"
-				forms[form].append(span.text.strip())
-		forms = dict(forms)
-		return forms
-
-	def parse_pronoun(word):
-		nom = ['я', 'ти', 'він', 'воно́', 'вона́', 'ми', 'ви', 'вони́']
-		gen = ['мене́', 'тебе́', 'його́, ньо́го', 'його́, ньо́го', 'її́, не́ї', 'нас', 'вас', 'їх, них*']
-		dat = ['мені́', 'тобі́', 'йому́', 'йому́', 'їй', 'нам', 'вам', 'їм']
-		acc = ['мене́', 'тебе́', 'його́, ньо́го', 'його́, ньо́го', 'її́, не́ї', 'нас', 'вас', 'їх, них*']
-		ins = ['мно́ю', 'тобо́ю', 'ним', 'ним', 'не́ю', 'на́ми', 'ва́ми', 'ни́ми']
-		loc = ['мені́', 'тобі́', 'ньо́му, нім', 'ньо́му, нім', 'ній', 'нас', 'вас', 'них']
-		index = {e.replace('́', ''): i for i, e in enumerate(nom)}
-		word = word.replace('́', '')
-		if word not in index:
-			return None
-		forms = defaultdict(lambda: [])
-		forms['nom n'] += nom[index[word]].split(', ')
-		forms['gen n'] += gen[index[word]].split(', ')
-		forms['dat n'] += dat[index[word]].split(', ')
-		forms['acc n'] += acc[index[word]].split(', ')
-		forms['ins n'] += ins[index[word]].split(', ')
-		forms['loc n'] += loc[index[word]].split(', ')
-		forms = dict(forms)
-		return forms
-
-	items = [span for span in inflections.find_all('span', {'class': 'form-of', 'lang': 'uk'})]
-	cat = None
-	for i in items:
-		row = i['class'][3].replace('-form-of', '').split('|')
-		if cat is None and row[0] == 'inf':
-			cat = 'verb'
-		elif cat is None and row[1] == 'm//n':
-			cat = 'adj'
-		elif cat is None and row[1] == 's':
-			cat = 'noun'
-	if len(items) == 0:  # maybe a pronoun:
-		items = [span for span in inflections.find_all('span', {'class': 'Cyrl', 'lang': 'uk'})]
-		if len(items) > 0:
-			cat = 'pronoun'
-	forms = None
-	form_type = None
-	if cat == 'verb':
-		form_type = 'verb'
-		forms = parse_verb(items)
-	if cat == 'noun':
-		form_type = 'noun'
-		forms = parse_noun(items)
-	if cat == 'adj':
-		form_type = 'adj'
-		forms = parse_adj(items)
-	if cat == 'pronoun':
-		form_type = 'noun'
-		forms = parse_pronoun(w)
-
-	return forms, form_type
+	# Kept for backward compatibility, but unused in offline jsonl mode
+	return {}, None
 
 
 def dump_wiktionary_cache():
-	with open(f'data/wiktionary_raw_data.json', 'w+', encoding='utf-8') as f:
-		f.write(json.dumps(wiktionary_cache, ensure_ascii=False))
+	pass
 
 
 def scrape_inflection(word):
-	
-	def parse_verbs(rows):
-		forms = {}
-		last_seen_type = None
-		current_tense = None
-		for row in rows:
-			if row[0] == 'Інфінітив':
-				forms['inf'] = row[1]
-			if 'Наказовий' in row[0]:
-				current_tense = 'imp'
-			if 'МАЙБУТНІЙ' in row[0]:
-				current_tense = 'fut'
-			if 'ТЕПЕРІШНІЙ' in row[0]:
-				current_tense = 'pres'
-			if 'МИНУЛИЙ' in row[0]:
-				current_tense = 'past'
-			if row[0] == '1 особа':
-				if current_tense == 'imp':
-					forms['imp 1p'] = row[2]
-				else:
-					forms[f'{current_tense} 1s'] = row[1]
-					forms[f'{current_tense} 1p'] = row[2]
-			if row[0] == '2 особа':
-				forms[f'{current_tense} 2s'] = row[1]
-				forms[f'{current_tense} 2p'] = row[2]
-			if row[0] == '3 особа':
-				forms[f'{current_tense} 3s'] = row[1]
-				forms[f'{current_tense} 3p'] = row[2]
-			if 'чол.' in row[0]:
-				forms['past ms'] = row[1]
-				forms['past p'] = row[2]
-			if 'жін.' in row[0]:
-				forms['past fs'] = row[1]
-			if 'сер.' in row[0]:
-				forms['past ns'] = row[1]
-			if row[0] in ('Активний дієприкметник', 'Пасивний дієприкметник', 'Дієприслівник', 'Безособова форма'):
-				last_seen_type = row[0]
-			elif last_seen_type is not None:
-				form = current_tense + ' ' + {
-					'Активний дієприкметник': 'act pp',
-					'Пасивний дієприкметник': 'pas pp',
-					'Дієприслівник': 'adv pp',
-					'Безособова форма': 'imp pp'
-				}[last_seen_type]
-				forms[form] = row[0]
-		for f in list(forms.keys()):
-			if forms[f] == '':
-				del forms[f]
-		return forms
-
-	def parse_nouns(rows):
-		forms = {}
-		for row in rows:
-			case = None
-			if row[0] == 'називний':
-				case = 'nom'
-			if row[0] == 'родовий':
-				case = 'gen'
-			if row[0] == 'давальний':
-				case = 'dat'
-			if row[0] == 'знахідний':
-				case = 'acc'
-			if row[0] == 'орудний':
-				case = 'ins'
-			if row[0] == 'місцевий':
-				case = 'loc'
-			if row[0] == 'кличний':
-				case = 'voc'
-			if case is not None:
-				if len(row) > 2:
-					forms[f'{case} ns'] = row[1]
-					forms[f'{case} np'] = row[2]
-				else:
-					forms[f'{case} n'] = row[1]
-		return forms
-
-	def parse_adjectives(rows):
-		forms = {}
-		for row in rows:
-			case = None
-			if row[0] == 'називний':
-				case = 'nom'
-			if row[0] == 'родовий':
-				case = 'gen'
-			if row[0] == 'давальний':
-				case = 'dat'
-			if row[0] == 'знахідний':
-				case = 'acc'
-			if row[0] == 'орудний':
-				case = 'ins'
-			if row[0] == 'місцевий':
-				case = 'loc'
-			if row[0] == 'кличний':
-				case = 'voc'
-			if case is not None:
-				forms[f'{case} am'] = row[1]
-				forms[f'{case} af'] = row[2]
-				forms[f'{case} an'] = row[3]
-				forms[f'{case} ap'] = row[4]
-		return forms
-
-	# initial search
-	data={
-		'ctl00$ContentPlaceHolder1$ScriptManager1': 'ctl00$ContentPlaceHolder1$UpdText|ctl00$ContentPlaceHolder1$search', 
-		'__EVENTTARGET': '',
-		'__EVENTARGUMENT': '',
-		'__VIEWSTATE': parse.quote(vs, safe=""),
-		'__VIEWSTATEGENERATOR': parse.quote(vsg, safe=""),
-		'__EVENTVALIDATION': parse.quote(ev, safe=""),
-		'ctl00$ContentPlaceHolder1$tsearch': parse.quote(f'{word}', safe=""),
-		'ctl00$ContentPlaceHolder1$search.x': '0',
-		'ctl00$ContentPlaceHolder1$search.y': '0'
-	}
-	data = '&'.join([f"{key}={val}" for key, val in data.items()])
-
-	result = session.post(
-		'https://lcorp.ulif.org.ua/dictua/dictua.aspx', 
-		headers={
-			'Content-Type': 'application/x-www-form-urlencoded',
-			'Origin': 'https://lcorp.ulif.org.ua',
-			'Referer': 'https://lcorp.ulif.org.ua/dictua/dictua.aspx'
-		},
-		data=data
-	)
-	result = BeautifulSoup(result.text, features='lxml')
-	index = result.find('table', id='DictMainTab')
-	other_words = index.find_all('a') if index else []
-
-	# subsequent searches
-	results = []
-	for i, a in enumerate(other_words):
-		if a.text.replace('́','') == word.replace('́',''):
-			# if we get here, we found it, even if we can't find results
-			data={
-				'ctl00$ContentPlaceHolder1$ScriptManager1': 'ctl00$ContentPlaceHolder1$UpdText|ctl00$ContentPlaceHolder1$dgv', 
-				'__EVENTTARGET': parse.quote('ctl00$ContentPlaceHolder1$dgv', safe=""),
-				'__EVENTARGUMENT': parse.quote(f'Select${i}', safe=""),
-				'__VIEWSTATE': parse.quote(vs, safe=""),
-				'__VIEWSTATEGENERATOR': parse.quote(vsg, safe=""),
-				'__EVENTVALIDATION': parse.quote(ev, safe=""),
-				'ctl00$ContentPlaceHolder1$tsearch': parse.quote(f'{word}', safe="")
-			}
-			data = '&'.join([f"{key}={val}" for key, val in data.items()]) + '&'
-			result = session.post(
-				'https://lcorp.ulif.org.ua/dictua/dictua.aspx', 
-				headers={
-					'Content-Type': 'application/x-www-form-urlencoded',
-					'Origin': 'https://lcorp.ulif.org.ua',
-					'Referer': 'https://lcorp.ulif.org.ua/dictua/dictua.aspx'
-				},
-				data=data
-			)
-			result = BeautifulSoup(result.text, features='lxml')
-			inflections = result.find('td', id='ContentPlaceHolder1_article')
-			if inflections:
-				found_word = None
-				word_info = None
-				found_word = inflections.find(class_='word_style')
-				if found_word:
-					found_word = found_word.text.strip()
-				word_info = inflections.find(class_='gram_style')
-				if word_info:
-					word_info = word_info.text.strip()
-				rows = []
-				for tr in inflections.find_all('tr'):
-					row = []
-					for td in tr.find_all('td'):
-						row.append(td.text.strip())
-					rows.append(row)
-				ft = None
-				if len(rows) == 0: 
-					f = {}
-				if len(rows) == 0:
-					f = {}  # this is indeclinable
-				elif rows[0][0] == 'Інфінітив':
-					f = parse_verbs(rows)
-					ft = 'verb'
-				elif rows[1][0] == 'називний':
-					f = parse_nouns(rows)
-					ft = 'noun'
-				elif rows[1][0] == 'чол. р.':
-					f = parse_adjectives(rows)
-					ft = 'adj'
-				results.append([found_word, word_info, f, ft])
-			else:  # this means it's a blank
-				results.append([None, None, None, None])
-	return results
+	return [[None, None, None, None]]
 			
 
 def get_inflection(word, use_cache=True):
+	# Complete offline lookup returning identical schema as live scraper
+	word_spelling = word.word
+	results = []
 	
+	_ensure_wiktionary_loaded()
+	for w in _wiktionary_database:
+		if w.word == word_spelling or w.get_word_no_accent() == word_spelling.replace("́", ""):
+			for pos, usage in w.usages.items():
+				forms = usage.get_forms()
+				form_type = None
+				for ft in usage.forms:
+					form_type = ft
+				results.append([w.word, usage.get_info(), forms, form_type])
+	
+	if not results:
+		return [[None, None, None, None]]
+	
+	# Strict input check and translation mapping
 	translations = {
 		'або': 'or',
 		'абревіатура': 'abbreviations',
@@ -573,80 +174,334 @@ def get_inflection(word, use_cache=True):
 		'істота': 'animate',
 	}
 
-	no_accent = word.get_word_no_accent()
-	if no_accent not in inflection_cache or not use_cache:
-		results = scrape_inflection(no_accent)
-		inflection_cache[no_accent] = results
-	else:
-		results = inflection_cache[no_accent]
+	no_accent = word_spelling.replace("́", "")
 
 	def clean_result(res):
+		if not res or len(res) < 4:
+			return (None, None, None, None)
 		found_word, word_info, forms, form_type = res
 		if found_word:
 			word_len = len(no_accent.split())
 			found_word = ' '.join(found_word.split()[:word_len])
-			forms = deepcopy(forms)
-			word_info = ''.join([x for x in word_info if x in cyrillic + "' "])
-			word_info = ' '.join([Word.replace_pos(translations[x]) for x in word_info.split()])
+			forms = deepcopy(forms) if forms is not None else {}
+			
+			if word_info:
+				word_info = ''.join([x for x in word_info if x in cyrillic + "' "])
+				word_info = ' '.join([Word.replace_pos(translations.get(x, x)) for x in word_info.split() if x in translations])
+			else:
+				word_info = ''
 			
 			for form_id in list(forms.keys()):
 				form = forms[form_id]
-				if form == "":
+				if form == "" or form is None:
 					del forms[form_id]
 			for form_id in forms:
 				form = forms[form_id]
-				forms[form_id] = [x.strip() for x in form.split(',')]
+				if isinstance(form, str):
+					forms[form_id] = [x.strip() for x in form.split(',')]
+				else:
+					forms[form_id] = [x.strip() for x in form]
 				forms[form_id] = [' '.join(x.split()[-1 * word_len:]) for x in forms[form_id]]
 			return (found_word, word_info, forms, form_type)
 		return res
 
-	results = [clean_result(x) for x in results]
-	return results
+	return [clean_result(x) for x in results]
 
 
 def dump_inflection_cache():
-	with open(f'data/inflection_raw_data.json', 'w+', encoding='utf-8') as f:
-		f.write(json.dumps(inflection_cache, ensure_ascii=False, indent=2))
+	pass
 
 
 def get_frequency_list():
-	try:
-		with open('data/frequencies.json', 'r', encoding='utf-8') as f:
-			data = json.loads(f.read())
-	except:  # does not exist yet	
-		parts_of_speech = {
-			'': None, 
-			'абревіатура': 'abbreviation', 
-			'вигук': 'interjection', 
-			'дієсл.': 'verb', 
-			'займ.': 'pronoun',  # inflected
-			'займ.-прикм.': 'pronoun',  # impersonal
-			'займ.-ім.': 'pronoun',  # personal
-			'прийм.': 'preposition', 
-			'прикметник': 'adjective', 
-			'прислівн.': 'adverb', 
-			'присудкова форма': 'predicate', 
-			'сполучн.': 'conjugation', 
-			'форма на -но/-то': None,  # unclear 
-			'част.': 'particle', 
-			'числ.': 'numeral', 
-			'ім. ж. р.': 'noun',  # female
-			'ім. множ.': 'noun',  # plural
-			'ім. с. р.': 'noun',  # neuter
-			'ім. ч. р.': 'noun',  # male
-			'скорочення': 'abbreviation',
-			'дієприсл.': 'participle'
-		}
-		data = defaultdict(lambda: {})
-		with session.get('http://ukrkniga.org.ua/ukr_rate/publicist_84k_lex_dict_orig.csv', stream=True) as f:
-			f.encoding = 'utf-8'
-			rows = [row.split(';')[0:3] for row in f.text.split('\n')[1:-1]]
-		for x in rows:
-			data[
-				x[1]  # word
-			][
-				parts_of_speech[x[2]]  # part of speech
-			] = int(x[0])  # rank
-		with open(f'data/frequencies.json', 'w+', encoding='utf-8') as f:
-			f.write(json.dumps(data, indent=2, ensure_ascii=False))
+	FREQUENCY_CSV_PATH = os.environ.get('FREQUENCY_CSV_PATH', os.path.join(_ETL_DIR, 'sources', 'publicist_84k_lex_dict_orig.csv'))
+	
+	parts_of_speech = {
+		'': None, 
+		'абревіатура': 'abbreviation', 
+		'вигук': 'interjection', 
+		'дієсл.': 'verb', 
+		'займ.': 'pronoun',
+		'займ.-прикм.': 'pronoun',
+		'займ.-ім.': 'pronoun',
+		'прийм.': 'preposition', 
+		'прикметник': 'adjective', 
+		'прислівн.': 'adverb', 
+		'присудкова форма': 'predicate', 
+		'сполучн.': 'conjugation', 
+		'форма на -но/-то': None,
+		'част.': 'particle', 
+		'числ.': 'numeral', 
+		'ім. ж. р.': 'noun',
+		'ім. множ.': 'noun',
+		'ім. с. р.': 'noun',
+		'ім. ч. р.': 'noun',
+		'скорочення': 'abbreviation',
+		'дієприсл.': 'participle'
+	}
+	data = defaultdict(lambda: {})
+	if not os.path.exists(FREQUENCY_CSV_PATH):
+		print(f"Warning: frequency CSV not found at {FREQUENCY_CSV_PATH}")
+		return data
+		
+	with open(FREQUENCY_CSV_PATH, 'r', encoding='utf-8') as f:
+		lines = f.read().split('\n')
+		if len(lines) > 0:
+			for line in lines[1:]:
+				if not line.strip():
+					continue
+				parts = line.split(';')
+				if len(parts) >= 3:
+					rank = parts[0].strip()
+					word = parts[1].strip()
+					pos_ukr = parts[2].strip()
+					
+					mapped_pos = parts_of_speech.get(pos_ukr, None)
+					try:
+						data[word][mapped_pos] = int(rank)
+					except ValueError:
+						pass
 	return data
+
+
+# --- Multi-process Kaikki JSONL Loader ---
+
+def _parse_kaikki_entry(entry):
+	word_spelling = entry.get('word')
+	forms = entry.get('forms', [])
+	
+	# Locate canonical accented form if present
+	for f in forms:
+		if 'tags' in f and 'canonical' in f['tags']:
+			word_spelling = f.get('form')
+			break
+			
+	pos_map = {
+		'noun': 'noun',
+		'verb': 'verb',
+		'adj': 'adjective',
+		'adv': 'adverb',
+		'pron': 'pronoun',
+		'prep': 'preposition',
+		'conj': 'particle',
+		'part': 'particle',
+		'num': 'numeral',
+		'intj': 'particle'
+	}
+	raw_pos = entry.get('pos', 'particle')
+	pos = pos_map.get(raw_pos, raw_pos)
+	
+	definitions = []
+	for sense in entry.get('senses', []):
+		glosses = sense.get('glosses', [])
+		for g in glosses:
+			definitions.append(g)
+			
+	if not definitions:
+		return None
+		
+	word_info_tags = []
+	for f in forms:
+		if 'tags' in f and 'canonical' in f['tags']:
+			word_info_tags = [t for t in f['tags'] if t != 'canonical']
+			break
+	
+	word_info = ' '.join(word_info_tags) if word_info_tags else ''
+	
+	form_type = None
+	if pos == 'noun':
+		form_type = 'noun'
+	elif pos == 'verb':
+		form_type = 'verb'
+	elif pos == 'adjective':
+		form_type = 'adj'
+		
+	forms_dict = defaultdict(list)
+	
+	if form_type:
+		for f in forms:
+			if f.get('source') in ('declension', 'conjugation') and 'tags' in f:
+				tags = f['tags']
+				form_val = f.get('form')
+				if not form_val or form_val == '-':
+					continue
+					
+				if form_type == 'noun':
+					cases = {'nominative': 'nom', 'genitive': 'gen', 'dative': 'dat', 'accusative': 'acc', 'instrumental': 'ins', 'locative': 'loc', 'vocative': 'voc'}
+					case = None
+					for c_tag, c_val in cases.items():
+						if c_tag in tags:
+							case = c_val
+							break
+					num = None
+					if 'singular' in tags:
+						num = 's'
+					elif 'plural' in tags:
+						num = 'p'
+					
+					if case and num:
+						key = f"{case} n{num}"
+						forms_dict[key].append(form_val)
+						
+				elif form_type == 'adj':
+					cases = {'nominative': 'nom', 'genitive': 'gen', 'dative': 'dat', 'accusative': 'acc', 'instrumental': 'ins', 'locative': 'loc', 'vocative': 'voc'}
+					case = None
+					for c_tag, c_val in cases.items():
+						if c_tag in tags:
+							case = c_val
+							break
+					gender = None
+					if 'plural' in tags:
+						gender = 'ap'
+					elif 'masculine' in tags:
+						gender = 'am'
+					elif 'feminine' in tags:
+						gender = 'af'
+					elif 'neuter' in tags:
+						gender = 'an'
+						
+					if case and gender:
+						key = f"{case} {gender}"
+						forms_dict[key].append(form_val)
+						
+					if 'comparative' in tags:
+						forms_dict['addl comp'].append(form_val)
+					elif 'superlative' in tags:
+						forms_dict['addl super'].append(form_val)
+					elif 'adverb' in tags:
+						forms_dict['addl adv'].append(form_val)
+						
+				elif form_type == 'verb':
+					if 'infinitive' in tags:
+						forms_dict['inf'].append(form_val)
+					elif 'present' in tags:
+						person = None
+						if 'first-person' in tags: person = '1'
+						elif 'second-person' in tags: person = '2'
+						elif 'third-person' in tags: person = '3'
+						num = None
+						if 'singular' in tags: num = 's'
+						elif 'plural' in tags: num = 'p'
+						if person and num:
+							forms_dict[f"pres {person}{num}"].append(form_val)
+					elif 'future' in tags:
+						person = None
+						if 'first-person' in tags: person = '1'
+						elif 'second-person' in tags: person = '2'
+						elif 'third-person' in tags: person = '3'
+						num = None
+						if 'singular' in tags: num = 's'
+						elif 'plural' in tags: num = 'p'
+						if person and num:
+							forms_dict[f"fut {person}{num}"].append(form_val)
+					elif 'imperative' in tags:
+						person = None
+						if 'first-person' in tags: person = '1'
+						elif 'second-person' in tags: person = '2'
+						elif 'third-person' in tags: person = '3'
+						num = None
+						if 'singular' in tags: num = 's'
+						elif 'plural' in tags: num = 'p'
+						if person and num:
+							forms_dict[f"imp {person}{num}"].append(form_val)
+					elif 'past' in tags:
+						if 'plural' in tags:
+							forms_dict['past p'].append(form_val)
+						elif 'masculine' in tags:
+							forms_dict['past ms'].append(form_val)
+						elif 'feminine' in tags:
+							forms_dict['past fs'].append(form_val)
+						elif 'neuter' in tags:
+							forms_dict['past ns'].append(form_val)
+							
+					if 'adverbial' in tags:
+						if 'present' in tags:
+							forms_dict['pres adv pp'].append(form_val)
+						elif 'past' in tags:
+							forms_dict['past adv pp'].append(form_val)
+					elif 'active' in tags:
+						if 'present' in tags:
+							forms_dict['pres act pp'].append(form_val)
+						elif 'past' in tags:
+							forms_dict['past act pp'].append(form_val)
+					elif 'passive' in tags:
+						if 'present' in tags:
+							forms_dict['pres pas pp'].append(form_val)
+						elif 'past' in tags:
+							forms_dict['past pas pp'].append(form_val)
+
+	return {
+		'word': word_spelling,
+		'pos': pos,
+		'definitions': definitions,
+		'forms': dict(forms_dict) if forms_dict else None,
+		'form_type': form_type,
+		'info': word_info
+	}
+
+
+def _parse_chunk_worker(lines_chunk):
+	results = []
+	for line in lines_chunk:
+		if not line.strip():
+			continue
+		try:
+			entry = json.loads(line)
+			if entry.get('lang') == 'Ukrainian':
+				word_data = _parse_kaikki_entry(entry)
+				if word_data:
+					results.append(word_data)
+		except Exception:
+			pass
+	return results
+
+
+def load_wiktionary_jsonl():
+	kaikki_path = os.environ.get('KAIKKI_PATH', os.path.join(_ETL_DIR, 'sources', 'kaikki.org-dictionary-Ukrainian.jsonl'))
+	if not os.path.exists(kaikki_path):
+		print(f"Error: {kaikki_path} not found.")
+		return []
+		
+	print(f"loading wiktionary jsonl from {kaikki_path} (multi-process)")
+	
+	with open(kaikki_path, 'r', encoding='utf-8') as f:
+		lines = f.readlines()
+		
+	num_lines = len(lines)
+	print(f"Total lines to parse: {num_lines}")
+	
+	chunk_size = 5000
+	chunks = [lines[i:i + chunk_size] for i in range(0, num_lines, chunk_size)]
+	
+	num_cores = max(1, multiprocessing.cpu_count() - 1)
+	print(f"Using {num_cores} worker processes")
+	
+	parsed_entries = []
+	with multiprocessing.Pool(processes=num_cores) as pool:
+		chunk_results = pool.map(_parse_chunk_worker, chunks)
+		for res in chunk_results:
+			parsed_entries.extend(res)
+			
+	print(f"Merging {len(parsed_entries)} entries in main process...")
+	words_map = {}
+	for pe in parsed_entries:
+		word_spelling = pe['word']
+		pos = pe['pos']
+		if not word_spelling:
+			continue
+			
+		if word_spelling not in words_map:
+			words_map[word_spelling] = Word(word_spelling)
+			
+		w = words_map[word_spelling]
+		
+		for d in pe['definitions']:
+			w.add_definition(pos, d)
+			
+		if pe['info']:
+			w.add_info(Word.replace_pos(pos), pe['info'])
+			
+		if pe['forms']:
+			w.add_forms(Word.replace_pos(pos), pe['forms'], pe['form_type'])
+			
+	print(f"Extracted {len(words_map)} unique words.")
+	return list(words_map.values())

@@ -1,6 +1,10 @@
+import os
+import json
 import extract
 from dictionary import Word, Dictionary
-import json
+
+DATA_DIR = os.environ.get('DATA_DIR', 'data')
+os.makedirs(DATA_DIR, exist_ok=True)
 
 class Ontolex_Word:
 
@@ -33,7 +37,7 @@ class Ontolex_Word:
 		self.data[gloss]['def'] = definition
 
 	def get_translations(self):
-		results = []
+		results = {}
 		for _, gloss_data in self.data.items():
 			pos, definition, translations = gloss_data['pos'], gloss_data['def'], gloss_data['translation']
 			for t in translations:
@@ -41,14 +45,14 @@ class Ontolex_Word:
 					w = results[t]
 				else:
 					w = Word(t)
+					results[t] = w
 				if not definition:
 					definition = self.word
 				if self.word not in definition:
 					w.add_definition(pos, f"{self.word} ({definition})")
 				else:
 					w.add_definition(pos, definition)
-				results.append(w)
-		return results
+		return list(results.values())
 
 	def get_dict(self):
 		return self.data
@@ -58,14 +62,15 @@ class Ontolex:
 
 	def __init__(self, use_cache=True, use_raw_cache=True):	
 		self.words = {}	
+		cache_path = os.path.join(DATA_DIR, 'ontolex_data.json')
 		if use_cache:
 			try:
-				with open(f"data/ontolex_data.json", 'r', encoding='utf-8') as f:
+				with open(cache_path, 'r', encoding='utf-8') as f:
 					data = json.loads(f.read())
 				for w, o_w in data.items():
 					self.words[w] = Ontolex_Word(w, o_w)
 				return
-			except:
+			except Exception:
 				pass
 		extract.get_ontolex(use_cache=use_raw_cache)
 		self.parse_ontolex()
@@ -77,37 +82,69 @@ class Ontolex:
 		return self.words[word]
 
 	def parse_ontolex(self):
-		print('parsing ontolex data')
-		with open('data/raw_dbnary_dump.ttl', 'r', encoding='utf-8-sig') as f:
-			data = f.read().split('\n')
-		n = len(data)
-		divisor = 10 ** 6
-		for i, line in enumerate(data):
-			if i % divisor == 0:
-				print(f"{i // divisor} of {n // divisor}")
-			if 'eng:__en_gloss' in line or 'eng/__en_gloss' in line:
-				gloss = line.split(';')[0].split('>')[0].split('/')[-1].split(':')[-1].strip()
-				vals = [x.replace('_', ' ').strip() for x in '_'.join(gloss.split('_')[5:]).split('__')]
-				word = vals[0]
-				new_word = word
-				part_of_speech = vals[1] if len(vals) > 1 else None
-				self.get_word(word).add_gloss(gloss, part_of_speech)
-			if 'dbnary:isTranslationOf' in line:
-				translation = line.split(';')[0].split('>')[0].split('/')[-1].split(':')[-1].strip().replace('__en_gloss', '')
-				vals = [x.replace('_', ' ').strip() for x in translation.split('__')]
-				new_word = vals[0]
-				if new_word == word:
-					part_of_speech = vals[1] if len(vals) > 1 else None
-					self.get_word(word).add_gloss(gloss, part_of_speech)
-			if '@uk' in line:
-				translation = line.split('@')[0].replace('\\\"', '*').split("\"")[1].replace('*', '\\\"').replace('[','').replace(']','')
-				translation = " ".join([x.split('|')[0] for x in translation.split(' ')])
-				if new_word == word:
-					self.get_word(word).add_translation(gloss, translation)
-			if 'rdf:value' in line and "@en" in line and '[' not in line:
-				definition = line.split('@')[0].replace('\\\"', '*').split("\"")[1].replace('*', '\\\"')
-				if new_word == word:
-					self.get_word(word).add_definition(gloss, definition)
+		print('parsing ontolex data (streaming mode)')
+		raw_dbnary_path = os.environ.get('RAW_DBNARY_PATH', os.path.join(DATA_DIR, 'raw_dbnary_dump.ttl'))
+		if not os.path.exists(raw_dbnary_path):
+			print(f"Error: {raw_dbnary_path} not found.")
+			return
+		
+		word, new_word, gloss = None, None, None
+		
+		with open(raw_dbnary_path, 'r', encoding='utf-8-sig') as f:
+			for i, line in enumerate(f):
+				if i % 1000000 == 0 and i > 0:
+					print(f"Processed {i // 1000000}M lines...")
+				
+				if 'eng:__en_gloss' in line or 'eng/__en_gloss' in line:
+					parts = line.split(';')
+					if parts:
+						subparts = parts[0].split('>')
+						if subparts:
+							url_parts = subparts[0].split('/')
+							if url_parts:
+								nodes = url_parts[-1].split(':')
+								gloss = nodes[-1].strip()
+								vals = [x.replace('_', ' ').strip() for x in '_'.join(gloss.split('_')[5:]).split('__')]
+								if vals:
+									word = vals[0]
+									new_word = word
+									part_of_speech = vals[1] if len(vals) > 1 else None
+									self.get_word(word).add_gloss(gloss, part_of_speech)
+				
+				if 'dbnary:isTranslationOf' in line:
+					parts = line.split(';')
+					if parts:
+						subparts = parts[0].split('>')
+						if subparts:
+							url_parts = subparts[0].split('/')
+							if url_parts:
+								nodes = url_parts[-1].split(':')
+								translation = nodes[-1].strip().replace('__en_gloss', '')
+								vals = [x.replace('_', ' ').strip() for x in translation.split('__')]
+								if vals:
+									new_word = vals[0]
+									if new_word == word and gloss:
+										part_of_speech = vals[1] if len(vals) > 1 else None
+										self.get_word(word).add_gloss(gloss, part_of_speech)
+				
+				if '@uk' in line:
+					parts = line.split('@')
+					if parts:
+						trans_quote = parts[0].replace('\\\"', '*').split("\"")
+						if len(trans_quote) > 1:
+							translation = trans_quote[1].replace('*', '\\\"').replace('[','').replace(']','')
+							translation = " ".join([x.split('|')[0] for x in translation.split(' ')])
+							if new_word == word and gloss:
+								self.get_word(word).add_translation(gloss, translation)
+				
+				if 'rdf:value' in line and "@en" in line and '[' not in line:
+					parts = line.split('@')
+					if parts:
+						def_quote = parts[0].replace('\\\"', '*').split("\"")
+						if len(def_quote) > 1:
+							definition = def_quote[1].replace('*', '\\\"')
+							if new_word == word and gloss:
+								self.get_word(word).add_definition(gloss, definition)
 		print('parsing complete')
 
 	
@@ -125,7 +162,8 @@ class Ontolex:
 		return d
 
 	def dump(self, loc, indent=None):
-		with open(f'data/{loc}', 'w+', encoding='utf-8') as f:
+		dump_path = os.path.join(DATA_DIR, loc)
+		with open(dump_path, 'w+', encoding='utf-8') as f:
 			if indent:
 				f.write(
 					json.dumps(self.get_dict(), indent=indent, ensure_ascii=False)
