@@ -1,6 +1,5 @@
 import React from 'react';
 import FormCell from './FormCell';
-import MatchAndStressText from './MatchAndStressText';
 import { getCellText, humanizeKey } from './utils';
 
 const TOOLTIPS: { [key: string]: string } = {
@@ -19,6 +18,36 @@ const TOOLTIPS: { [key: string]: string } = {
   p: 'Plural/Множина',
 };
 
+const PRONOUN_MAP: { [tense: string]: { [form: string]: string } } = {
+  pres: {
+    '1s': 'я',
+    '2s': 'ти',
+    '3s': 'він/вона/воно',
+    '1p': 'ми',
+    '2p': 'ви',
+    '3p': 'вони',
+  },
+  fut: {
+    '1s': 'я',
+    '2s': 'ти',
+    '3s': 'він/вона/воно',
+    '1p': 'ми',
+    '2p': 'ви',
+    '3p': 'вони',
+  },
+  imp: {
+    '1p': 'ми',
+    '2s': 'ти',
+    '2p': 'ви',
+  },
+  past: {
+    ms: 'він',
+    ns: 'воно',
+    fs: 'вона',
+    p: 'вони',
+  },
+};
+
 const getVerbFormTooltip = (
   tenseKey: string,
   formKey: string,
@@ -26,37 +55,7 @@ const getVerbFormTooltip = (
 ): string | undefined => {
   if (!formKey || value == null) return undefined;
 
-  const pronounMap: { [tense: string]: { [form: string]: string } } = {
-    pres: {
-      '1s': 'я',
-      '2s': 'ти',
-      '3s': 'він/вона/воно',
-      '1p': 'ми',
-      '2p': 'ви',
-      '3p': 'вони',
-    },
-    fut: {
-      '1s': 'я',
-      '2s': 'ти',
-      '3s': 'він/вона/воно',
-      '1p': 'ми',
-      '2p': 'ви',
-      '3p': 'вони',
-    },
-    imp: {
-      '1p': 'ми',
-      '2s': 'ти',
-      '2p': 'ви',
-    },
-    past: {
-      ms: 'він',
-      ns: 'воно',
-      fs: 'вона',
-      p: 'вони',
-    },
-  };
-
-  const pronoun = pronounMap[tenseKey]?.[formKey];
+  const pronoun = PRONOUN_MAP[tenseKey]?.[formKey];
   if (!pronoun) return undefined;
 
   const cellValues = Array.isArray(value)
@@ -95,21 +94,12 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
             >
               Inf.
             </th>
-            <td colSpan={4}>
-              {Array.isArray(forms.inf) ? (
-                forms.inf.map((item: string, idx: number) => (
-                  <React.Fragment key={idx}>
-                    <MatchAndStressText text={item} matchTerm={query} />
-                    {idx < forms.inf.length - 1 && ', '}
-                  </React.Fragment>
-                ))
-              ) : (
-                <MatchAndStressText
-                  text={forms.inf as string}
-                  matchTerm={query}
-                />
-              )}
-            </td>
+            <FormCell
+              value={forms.inf}
+              tooltip={TOOLTIPS.inf}
+              query={query}
+              colSpan={3}
+            />
           </tr>
         )}
 
@@ -163,11 +153,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                 value={forms.past.p || []}
                 tooltip={getVerbFormTooltip('past', 'p', forms.past.p || [])}
                 query={query}
-                {...({ colSpan: 3 } as any)} // Allow standard colSpan passing if needed, or simply render
+                colSpan={3}
               />
-              {/* Empty cell spacer to keep layout grid aligned */}
-              <td style={{ display: 'none' }}></td>
-              <td style={{ display: 'none' }}></td>
             </tr>
             {forms.past.pp &&
               Object.entries(forms.past.pp).map(([ppKey, ppValue]) => (
@@ -179,21 +166,12 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                   >
                     {humanizeKey(ppKey)}
                   </th>
-                  <td colSpan={3}>
-                    {Array.isArray(ppValue) ? (
-                      ppValue.map((item: any, idx: number) => (
-                        <React.Fragment key={idx}>
-                          <MatchAndStressText text={item} matchTerm={query} />
-                          {idx < ppValue.length - 1 && <br />}
-                        </React.Fragment>
-                      ))
-                    ) : (
-                      <MatchAndStressText
-                        text={ppValue as string}
-                        matchTerm={query}
-                      />
-                    )}
-                  </td>
+                  <FormCell
+                    value={ppValue}
+                    tooltip={getVerbFormTooltip('past', ppKey, ppValue)}
+                    query={query}
+                    colSpan={3}
+                  />
                 </tr>
               ))}
           </>
@@ -267,21 +245,12 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                   >
                     {humanizeKey(ppKey)}
                   </th>
-                  <td colSpan={3}>
-                    {Array.isArray(ppValue) ? (
-                      ppValue.map((item: any, idx: number) => (
-                        <React.Fragment key={idx}>
-                          <MatchAndStressText text={item} matchTerm={query} />
-                          {idx < ppValue.length - 1 && <br />}
-                        </React.Fragment>
-                      ))
-                    ) : (
-                      <MatchAndStressText
-                        text={ppValue as string}
-                        matchTerm={query}
-                      />
-                    )}
-                  </td>
+                  <FormCell
+                    value={ppValue}
+                    tooltip={getVerbFormTooltip('pres', ppKey, ppValue)}
+                    query={query}
+                    colSpan={3}
+                  />
                 </tr>
               ))}
           </>
@@ -355,21 +324,12 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                   >
                     {humanizeKey(ppKey)}
                   </th>
-                  <td colSpan={3}>
-                    {Array.isArray(ppValue) ? (
-                      ppValue.map((item: any, idx: number) => (
-                        <React.Fragment key={idx}>
-                          <MatchAndStressText text={item} matchTerm={query} />
-                          {idx < ppValue.length - 1 && <br />}
-                        </React.Fragment>
-                      ))
-                    ) : (
-                      <MatchAndStressText
-                        text={ppValue as string}
-                        matchTerm={query}
-                      />
-                    )}
-                  </td>
+                  <FormCell
+                    value={ppValue}
+                    tooltip={getVerbFormTooltip('fut', ppKey, ppValue)}
+                    query={query}
+                    colSpan={3}
+                  />
                 </tr>
               ))}
           </>

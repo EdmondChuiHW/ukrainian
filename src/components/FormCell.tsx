@@ -4,21 +4,25 @@ import { hasExactCellMatch } from './utils';
 
 interface FormCellProps {
   value: string | string[];
-  tooltip?: string;
   query: string;
+  tooltip?: string;
+  colSpan?: number;
+  separator?: string;
 }
 
 export const FormCell: React.FC<FormCellProps> = ({
   value,
   tooltip,
   query,
+  colSpan,
+  separator = colSpan && colSpan > 1 ? ', ' : <br />,
 }) => {
   const isEmptyArray = Array.isArray(value) && value.length === 0;
   const isEmptyString = typeof value === 'string' && !value.trim();
 
   if (value == null || isEmptyArray || isEmptyString) {
     return (
-      <td data-tooltip={tooltip}>
+      <td data-tooltip={tooltip} colSpan={colSpan}>
         <span className="empty-cell">–</span>
       </td>
     );
@@ -32,7 +36,7 @@ export const FormCell: React.FC<FormCellProps> = ({
       return value.map((item, idx) => (
         <React.Fragment key={`cell-item-${idx}`}>
           <MatchAndStressText text={item} matchTerm={query} />
-          {idx < value.length - 1 && <br />}
+          {idx < value.length - 1 && <>{separator}</>}
         </React.Fragment>
       ));
     }
@@ -40,7 +44,7 @@ export const FormCell: React.FC<FormCellProps> = ({
   };
 
   return (
-    <td className={cellClass} data-tooltip={tooltip}>
+    <td className={cellClass} data-tooltip={tooltip} colSpan={colSpan}>
       {renderCellContent()}
     </td>
   );
