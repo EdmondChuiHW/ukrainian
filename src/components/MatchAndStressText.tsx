@@ -49,13 +49,10 @@ function useMatchHighlight(text: string, matchTerm?: string) {
   const matchIndexes: [number, number][] = [];
   if (!matchTerm) return matchIndexes;
 
-  let startIndex = 0;
-  while (true) {
-    const index = text.indexOf(matchTerm, startIndex);
-    if (index < 0) break;
+  const matches = text.matchAll(new RegExp(matchTerm, 'gi'));
 
-    matchIndexes.push([index, index + matchTerm.length]);
-    startIndex = index + matchTerm.length;
+  for (const match of matches) {
+    matchIndexes.push([match.index, match.index + matchTerm.length]);
   }
 
   return matchIndexes;
