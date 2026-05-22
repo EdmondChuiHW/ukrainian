@@ -467,7 +467,8 @@ button {
 }
 
 .cell-exact {
-  background-color: rgba(255, 210, 77, 0.8);
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
 }
 
 .cell-exact ::highlight(search-match) {
