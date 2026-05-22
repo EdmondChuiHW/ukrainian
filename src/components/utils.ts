@@ -53,8 +53,8 @@ export const hasExactCellMatch = (value: any, query: string): boolean => {
 export const humanizeKey = (key: string): string => {
   const alias: { [key: string]: string } = {
     addl: 'Additional forms',
-    comp: 'Comparative',
-    super: 'Superlative',
+    comp: 'Comp.',
+    super: 'Super.',
     arg: 'Argumentative',
     adv: 'Adv.',
     imp: 'Imp.',
