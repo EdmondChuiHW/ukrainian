@@ -1,4 +1,4 @@
-import React, { useLayoutEffect } from 'react';
+import React, { useEffect } from 'react';
 import { getHighlight } from './utils';
 
 interface MatchAndStressTextProps {
@@ -49,7 +49,7 @@ function useMatchHighlight(text: string, matchTerm?: string) {
   const matchIndexes: [number, number][] = [];
   if (!matchTerm) return matchIndexes;
 
-  const matches = text.matchAll(new RegExp(matchTerm, 'gi'));
+  const matches = text.matchAll(new RegExp(RegExp.escape(matchTerm), 'gi'));
 
   for (const match of matches) {
     matchIndexes.push([match.index, match.index + matchTerm.length]);
@@ -63,7 +63,7 @@ function useHighlightRanges<T extends HTMLElement | null>(
   ref: React.RefObject<T>,
   indexRanges: [number, number][],
 ) {
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!ref.current) return;
 
     const textNode = ref.current.firstChild;
