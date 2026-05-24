@@ -3,10 +3,11 @@ import SimpleNounTable from './SimpleNounTable';
 import NounTable from './NounTable';
 import AdjectiveTable from './AdjectiveTable';
 import VerbTable from './VerbTable';
+import type { VerbForms } from './VerbTable';
 import GenericForms from './GenericForms';
 
 interface FormsTableProps {
-  forms: any;
+  forms: unknown;
   query: string;
 }
 
@@ -34,8 +35,8 @@ const isAdjectiveForms = (forms: any): boolean => {
   );
 };
 
-const isVerbForms = (forms: any): boolean => {
-  if (!forms) return false;
+const isVerbForms = (forms: unknown): forms is VerbForms => {
+  if (!forms || typeof forms !== 'object') return false;
   return ['inf', 'pres', 'past', 'fut', 'imp'].some((key) => key in forms);
 };
 

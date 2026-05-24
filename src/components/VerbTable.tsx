@@ -48,10 +48,46 @@ const PRONOUN_MAP: { [tense: string]: { [form: string]: string } } = {
   },
 };
 
+type FormValue = string | string[];
+
+type VerbPpForms = Record<string, FormValue>;
+
+type PastForms = {
+  ms?: FormValue;
+  ns?: FormValue;
+  fs?: FormValue;
+  p?: FormValue;
+  pp?: VerbPpForms;
+};
+
+type PresentFutureForms = {
+  '1s'?: FormValue;
+  '2s'?: FormValue;
+  '3s'?: FormValue;
+  '1p'?: FormValue;
+  '2p'?: FormValue;
+  '3p'?: FormValue;
+  pp?: VerbPpForms;
+};
+
+type ImperativeForms = {
+  '1p'?: FormValue;
+  '2s'?: FormValue;
+  '2p'?: FormValue;
+};
+
+export interface VerbForms {
+  inf?: FormValue;
+  past?: PastForms;
+  pres?: PresentFutureForms;
+  fut?: PresentFutureForms;
+  imp?: ImperativeForms;
+}
+
 const getVerbFormTooltip = (
   tenseKey: string,
   formKey: string,
-  value: any,
+  value: FormValue | undefined,
 ): string | undefined => {
   if (!formKey || value == null) return undefined;
 
@@ -76,7 +112,7 @@ const getVerbFormTooltip = (
 };
 
 interface VerbTableProps {
-  forms: any;
+  forms: VerbForms;
   query: string;
 }
 
@@ -129,8 +165,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               >
                 Sing.
               </th>
-              {['ms', 'ns', 'fs'].map((key) => {
-                const val = forms.past[key] || [];
+              {(['ms', 'ns', 'fs'] as const).map((key) => {
+                const val = forms.past?.[key] || [];
                 return (
                   <FormCell
                     key={key}
@@ -150,13 +186,13 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                 Plur.
               </th>
               <FormCell
-                value={forms.past.p || []}
-                tooltip={getVerbFormTooltip('past', 'p', forms.past.p || [])}
+                value={forms.past?.p || []}
+                tooltip={getVerbFormTooltip('past', 'p', forms.past?.p || [])}
                 query={query}
                 colSpan={3}
               />
             </tr>
-            {forms.past.pp &&
+            {forms.past?.pp &&
               Object.entries(forms.past.pp).map(([ppKey, ppValue]) => (
                 <tr key={ppKey}>
                   <th
@@ -203,8 +239,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               >
                 Sing.
               </th>
-              {['1s', '2s', '3s'].map((key) => {
-                const val = forms.pres[key] || [];
+              {(['1s', '2s', '3s'] as const).map((key) => {
+                const val = forms.pres?.[key] || [];
                 return (
                   <FormCell
                     key={key}
@@ -223,8 +259,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               >
                 Plur.
               </th>
-              {['1p', '2p', '3p'].map((key) => {
-                const val = forms.pres[key] || [];
+              {(['1p', '2p', '3p'] as const).map((key) => {
+                const val = forms.pres?.[key] || [];
                 return (
                   <FormCell
                     key={key}
@@ -235,7 +271,7 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                 );
               })}
             </tr>
-            {forms.pres.pp &&
+            {forms.pres?.pp &&
               Object.entries(forms.pres.pp).map(([ppKey, ppValue]) => (
                 <tr key={ppKey}>
                   <th
@@ -282,8 +318,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               >
                 Sing.
               </th>
-              {['1s', '2s', '3s'].map((key) => {
-                const val = forms.fut[key] || [];
+              {(['1s', '2s', '3s'] as const).map((key) => {
+                const val = forms.fut?.[key] || [];
                 return (
                   <FormCell
                     key={key}
@@ -302,8 +338,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               >
                 Plur.
               </th>
-              {['1p', '2p', '3p'].map((key) => {
-                const val = forms.fut[key] || [];
+              {(['1p', '2p', '3p'] as const).map((key) => {
+                const val = forms.fut?.[key] || [];
                 return (
                   <FormCell
                     key={key}
@@ -314,7 +350,7 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                 );
               })}
             </tr>
-            {forms.fut.pp &&
+            {forms.fut?.pp &&
               Object.entries(forms.fut.pp).map(([ppKey, ppValue]) => (
                 <tr key={ppKey}>
                   <th
@@ -365,8 +401,12 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                 <span className="empty-cell">–</span>
               </td>
               <FormCell
-                value={forms.imp['2s'] || []}
-                tooltip={getVerbFormTooltip('imp', '2s', forms.imp['2s'] || [])}
+                value={forms.imp?.['2s'] || []}
+                tooltip={getVerbFormTooltip(
+                  'imp',
+                  '2s',
+                  forms.imp?.['2s'] || [],
+                )}
                 query={query}
               />
               <td></td>
@@ -380,13 +420,21 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                 Plur.
               </th>
               <FormCell
-                value={forms.imp['1p'] || []}
-                tooltip={getVerbFormTooltip('imp', '1p', forms.imp['1p'] || [])}
+                value={forms.imp?.['1p'] || []}
+                tooltip={getVerbFormTooltip(
+                  'imp',
+                  '1p',
+                  forms.imp?.['1p'] || [],
+                )}
                 query={query}
               />
               <FormCell
-                value={forms.imp['2p'] || []}
-                tooltip={getVerbFormTooltip('imp', '2p', forms.imp['2p'] || [])}
+                value={forms.imp?.['2p'] || []}
+                tooltip={getVerbFormTooltip(
+                  'imp',
+                  '2p',
+                  forms.imp?.['2p'] || [],
+                )}
                 query={query}
               />
               <td></td>
