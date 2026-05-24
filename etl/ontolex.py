@@ -153,12 +153,11 @@ class Ontolex:
 		print('parsing complete')
 
 	
-	def get_dictionary(self, kaikki_path=None, frequency_csv_path=None, deletion_log_path=None, limit=None):
+	def get_dictionary(self, kaikki_path=None, frequency_csv_path=None, deletion_log_path=None):
 		dict = Dictionary(
 			kaikki_path=kaikki_path,
 			frequency_csv_path=frequency_csv_path,
 			deletion_log_path=deletion_log_path,
-			limit=limit,
 		)
 		for _, word in self.words.items():
 			translations = word.get_translations()

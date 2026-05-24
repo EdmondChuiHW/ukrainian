@@ -57,7 +57,7 @@ def report_debug_words(dictionary, debug_words: Optional[list[str]] = None, verb
             print("  No deletions")
 
 
-def main(limit: Optional[int] = None, debug_words: Optional[list[str]] = None, verbose: bool = False) -> None:
+def main(debug_words: Optional[list[str]] = None, verbose: bool = False) -> None:
     if Path.cwd().name != 'etl':
         raise RuntimeError('Run this from the etl directory: cd etl')
 
@@ -84,7 +84,6 @@ def main(limit: Optional[int] = None, debug_words: Optional[list[str]] = None, v
         kaikki_path=kaikki_path,
         frequency_csv_path=frequency_csv_path,
         deletion_log_path=deletion_log_path,
-        limit=limit,
     )
     d.add_wiktionary_words()
     d.dump(output_dir / 'dictionary_data.json', indent=4, final_form=True)
@@ -96,8 +95,6 @@ def main(limit: Optional[int] = None, debug_words: Optional[list[str]] = None, v
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run the Ukrainian ETL pipeline')
-    parser.add_argument('--limit', type=int, default=None,
-        help='Limit the number of wiktionary entries processed for profiling')
     parser.add_argument('--debug-words', nargs='+', default=None,
         help='Word(s) to inspect after pipeline completion')
     parser.add_argument('--debug-word', action='append', default=None,
@@ -112,4 +109,4 @@ if __name__ == '__main__':
         debug_words.extend(args.debug_word)
     if not debug_words:
         debug_words = None
-    main(limit=args.limit, debug_words=debug_words, verbose=args.verbose)
+    main(debug_words=debug_words, verbose=args.verbose)

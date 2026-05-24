@@ -571,7 +571,7 @@ class Word:
 
 class Dictionary:
 
-	def __init__(self, kaikki_path=None, frequency_csv_path=None, deletion_log_path=None, limit=None):
+	def __init__(self, kaikki_path=None, frequency_csv_path=None, deletion_log_path=None):
 		if not kaikki_path:
 			raise ValueError('kaikki_path is required')
 		if not frequency_csv_path:
@@ -581,7 +581,6 @@ class Dictionary:
 		self.kaikki_path = kaikki_path
 		self.frequency_csv_path = frequency_csv_path
 		self.deletion_log_path = deletion_log_path
-		self.limit = limit
 		self.deletions = []
 
 	def _handle_no_accent(self, to_add, no_accent):
@@ -636,7 +635,7 @@ class Dictionary:
 		print("adding wiktionary words")
 		print('parsing wiktionary data from jsonl')
 		try:
-			words = extract.load_wiktionary_jsonl(self.kaikki_path, limit=self.limit)
+			words = extract.load_wiktionary_jsonl(self.kaikki_path)
 			for w in words:
 				self.add_to_dictionary(w)
 		except Exception as e:
@@ -685,7 +684,7 @@ class Dictionary:
 				if i % 1000 == 0:
 					print(f"{i} of {n}")
 				w = self.dict[word]
-				results = extract.get_inflection(w, self.kaikki_path, limit=self.limit)
+				results = extract.get_inflection(w, self.kaikki_path)
 				new_usages = w.add_inflections(results)
 				for n_u in new_usages:
 					new_w = Word(n_u.word)
@@ -752,7 +751,6 @@ class Dictionary:
 		if candidates:
 			return sorted(candidates)
 
-		print(f"no direct match for '{query}', trying cleaned query")
 		cleaned_query = re.sub(r"\s*\b(pf|impf|perfective|imperfective)\b\s*$", '', query, flags=re.IGNORECASE).strip()
 		if cleaned_query and cleaned_query != query:
 			cleaned_normalized = cleaned_query.replace('́', '')

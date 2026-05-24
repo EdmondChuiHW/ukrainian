@@ -42,7 +42,6 @@ def get_ontolex(raw_dbnary_path, use_cache=True):
 # Lazy-loaded offline database
 _wiktionary_database = None
 _wiktionary_index = None
-_wiktionary_limit = None
 
 def _build_wiktionary_index(words):
 	index = {
@@ -55,11 +54,10 @@ def _build_wiktionary_index(words):
 	return index
 
 
-def _ensure_wiktionary_loaded(kaikki_path, limit=None):
-	global _wiktionary_database, _wiktionary_index, _wiktionary_limit
+def _ensure_wiktionary_loaded(kaikki_path):
+	global _wiktionary_database, _wiktionary_index
 	if _wiktionary_database is None:
-		_wiktionary_limit = limit
-		_wiktionary_database = load_wiktionary_jsonl(kaikki_path, limit=limit)
+		_wiktionary_database = load_wiktionary_jsonl(kaikki_path)
 		_wiktionary_index = _build_wiktionary_index(_wiktionary_database)
 
 
@@ -107,12 +105,12 @@ def get_additional_adjectival_forms(text):
 				results[abbrevs[form[0]]] = get_word(form[1]) + get_word(form[3])
 	return results
 
-def get_inflection(word, kaikki_path, use_cache=True, limit=None):
+def get_inflection(word, kaikki_path, use_cache=True):
 	# Complete offline lookup returning identical schema as live scraper
 	word_spelling = word.word
 	results = []
 	
-	_ensure_wiktionary_loaded(kaikki_path, limit=limit)
+	_ensure_wiktionary_loaded(kaikki_path)
 	word_base = word.get_word_no_accent()
 	lookup_words = []
 	if _wiktionary_index is not None:
@@ -582,51 +580,10 @@ def _iter_jsonl_chunks(file_path, chunk_size=5000):
 			yield chunk
 
 
-def load_wiktionary_jsonl(kaikki_path, limit=None):
+def load_wiktionary_jsonl(kaikki_path):
 	if not os.path.exists(kaikki_path):
 		raise FileNotFoundError(f"{kaikki_path} not found")
-	
-	if limit is not None:
-		print(f"loading wiktionary jsonl from {kaikki_path} (limited to {limit} Ukrainian entries)")
-		words_map = {}
-		processed = 0
-		with open(kaikki_path, 'r', encoding='utf-8') as f:
-			for line in f:
-				if not line.strip():
-					continue
-				try:
-					entry = _json_loads(line)
-				except Exception:
-					continue
-				if entry.get('lang') != 'Ukrainian':
-					continue
-				word_datas = _parse_kaikki_entry(entry)
-				if not word_datas:
-					continue
-				if isinstance(word_datas, dict):
-					word_datas = [word_datas]
-				for word_data in word_datas:
-					word_spelling = word_data['word']
-					pos = word_data['pos']
-					if not word_spelling:
-						continue
-					if word_spelling not in words_map:
-						words_map[word_spelling] = Word(word_spelling)
-					w = words_map[word_spelling]
-					for d in word_data['definitions']:
-						if isinstance(d, dict):
-							alert_value = d.get('metadata') if d.get('alert') else False
-							w.add_definition(pos, d['definition'], alert=alert_value)
-						else:
-							w.add_definition(pos, d)
-					if word_data.get('info'):
-						w.add_info(pos, word_data['info'])
-					if word_data.get('forms') and word_data.get('form_type'):
-						w.add_forms(pos, word_data['forms'], word_data['form_type'])
-				processed += 1
-				if processed >= limit:
-					break
-		return list(words_map.values())
+
 	chunk_size = 5000
 	num_cores = max(1, multiprocessing.cpu_count() - 1)
 	print(f"Using {JSON_PARSER} parser and {num_cores} worker processes")
@@ -634,10 +591,10 @@ def load_wiktionary_jsonl(kaikki_path, limit=None):
 	parsed_entries = []
 	with multiprocessing.Pool(processes=num_cores) as pool:
 		for res in pool.imap(_parse_chunk_worker, _iter_jsonl_chunks(kaikki_path, chunk_size), chunksize=1):
-				if isinstance(res, list):
-					parsed_entries.extend(res)
-				elif res:
-					parsed_entries.append(res)
+			if isinstance(res, list):
+				parsed_entries.extend(res)
+			elif res:
+				parsed_entries.append(res)
 	print(f"Merging {len(parsed_entries)} entries in main process...")
 	words_map = {}
 	for pe in parsed_entries:

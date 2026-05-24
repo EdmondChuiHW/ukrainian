@@ -118,7 +118,7 @@ class TestUkrainianETL(unittest.TestCase):
         import extract
 
         jsonl_path = os.path.join(FIXTURES_DIR, 'kaikki_load_wiktionary_forms.jsonl')
-        words = extract.load_wiktionary_jsonl(jsonl_path, limit=1)
+        words = extract.load_wiktionary_jsonl(jsonl_path)
         self.assertEqual(len(words), 1)
         word = words[0]
         self.assertEqual(word.word, 'Ка́нберра')
