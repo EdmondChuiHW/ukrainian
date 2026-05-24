@@ -1,5 +1,6 @@
 import bz2
 import os
+import re
 import json
 import multiprocessing
 from collections import defaultdict
@@ -283,15 +284,37 @@ def _parse_kaikki_entry(entry):
 		targets = []
 		if isinstance(source.get('form_of'), list) and source['form_of']:
 			relations.append('form_of')
-		targets.extend([item.get('word') for item in source.get('form_of', []) if isinstance(item, dict) and item.get('word')])
+		targets.extend([
+			item.get('word').strip()
+			for item in source.get('form_of', [])
+			if isinstance(item, dict) and isinstance(item.get('word'), str)
+		])
 		if any(t in ('form-of', 'form_of') for t in tags):
 			relations.append('form_of')
 		if isinstance(source.get('alt_of'), list) and source['alt_of']:
 			relations.append('alt_of')
-		targets.extend([item.get('word') for item in source.get('alt_of', []) if isinstance(item, dict) and item.get('word')])
+		targets.extend([
+			item.get('word').strip()
+			for item in source.get('alt_of', [])
+			if isinstance(item, dict) and isinstance(item.get('word'), str)
+		])
 		if isinstance(source.get('alt-of'), list) and source['alt-of']:
 			relations.append('alt_of')
-		targets.extend([item.get('word') for item in source.get('alt-of', []) if isinstance(item, dict) and item.get('word')])
+		targets.extend([
+			item.get('word').strip()
+			for item in source.get('alt-of', [])
+			if isinstance(item, dict) and isinstance(item.get('word'), str)
+		])
+		if 'form_of' in relations and isinstance(source.get('links'), list):
+			for link in source.get('links'):
+				if isinstance(link, (list, tuple)) and link:
+					link_target = link[0]
+				elif isinstance(link, str):
+					link_target = link
+				else:
+					link_target = None
+				if link_target:
+					targets.append(link_target.strip())
 		relation_tags = [t for t in tags if t in ('alternative', 'abbreviation', 'diminutive', 'augmentative', 'comparative', 'dialectal', 'variant', 'contraction')]
 		relations.extend(relation_tags)
 		if relations:
@@ -303,7 +326,7 @@ def _parse_kaikki_entry(entry):
 			chosen_relation = unique_relations[0]
 			metadata = {
 				'relations': unique_relations,
-				'targets': sorted(set(targets)),
+				'targets': sorted({target for target in targets if target}),
 				'tags': sorted(set(tags)),
 			}
 			return metadata

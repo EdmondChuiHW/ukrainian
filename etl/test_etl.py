@@ -347,6 +347,7 @@ class TestUkrainianETL(unittest.TestCase):
 
         base = dictionary.Word('скасува́ння')
         base.add_definition('noun', 'cancellation')
+        base.add_forms('noun', {'loc sg': ['скасува́нні']}, 'noun')
 
         alerted_usage = dictionary.Usage('скасува́нні', 'noun')
         alerted_metadata = {
@@ -366,6 +367,62 @@ class TestUkrainianETL(unittest.TestCase):
         alerted_usage.clean_alerted_words(d)
         self.assertEqual(alerted_usage.get_definitions(accept_alerts=True), [])
         self.assertEqual(alerted_usage.alerted_definitions, {})
+
+    def test_clean_alerted_words_preserves_form_of_when_lemma_forms_missing(self):
+        import dictionary
+
+        lemma = dictionary.Word('скасува́ння')
+        lemma.add_definition('noun', 'cancellation')
+
+        alerted_usage = dictionary.Usage('скасува́нні', 'noun')
+        alerted_metadata = {
+            'relations': ['form_of'],
+            'targets': ['скасува́ння'],
+            'tags': ['form-of', 'locative', 'singular']
+        }
+        alerted_usage.add_definition('locative singular of скасува́ння (skasuvánnja)', alert=alerted_metadata)
+
+        d = dictionary.Dictionary(
+            kaikki_path=os.environ['KAIKKI_PATH'],
+            frequency_csv_path=os.environ['FREQUENCY_CSV_PATH']
+        )
+        d.dict[lemma.word] = lemma
+        d.accentless_words[lemma.get_word_no_accent()].add(lemma.word)
+
+        alerted_usage.clean_alerted_words(d)
+        self.assertIn('locative singular of скасува́ння (skasuvánnja)', alerted_usage.alerted_definitions)
+        self.assertEqual(alerted_usage.alerted_definitions['locative singular of скасува́ння (skasuvánnja)']['relations'], ['form_of'])
+
+    def test_parse_kaikki_entry_includes_links_and_strips_form_of_annotations(self):
+        import extract
+
+        entry = {
+            'word': 'ску́чать',
+            'pos': 'verb',
+            'senses': [{
+                'links': [['ску́чити', 'скучити#Ukrainian']],
+                'glosses': ['third-person plural future indicative of ску́чити pf (skúčyty)'],
+                'tags': ['form-of', 'future', 'indicative', 'plural', 'third-person'],
+                'form_of': [{'word': 'ску́чити pf', 'extra': 'skúčyty'}]
+            }]
+        }
+
+        parsed = extract._parse_kaikki_entry(entry)
+        self.assertEqual(parsed['definitions'][0]['metadata']['relations'], ['form_of'])
+        self.assertEqual(parsed['definitions'][0]['metadata']['targets'], ['ску́чити', 'ску́чити pf'])
+
+    def test_find_word_candidates_cleans_form_of_target_when_needed(self):
+        import dictionary
+
+        d = dictionary.Dictionary(
+            kaikki_path=os.environ['KAIKKI_PATH'],
+            frequency_csv_path=os.environ['FREQUENCY_CSV_PATH']
+        )
+        base = dictionary.Word('ску́чити')
+        d.dict[base.word] = base
+        d.accentless_words[base.get_word_no_accent()].add(base.word)
+
+        self.assertEqual(d._find_word_candidates('ску́чити pf'), ['ску́чити'])
 
     def test_clean_alerted_words_preserves_alt_of_metadata(self):
         import dictionary

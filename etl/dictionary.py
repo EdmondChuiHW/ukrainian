@@ -136,6 +136,23 @@ class Usage:
 			self.definitions.pop(d, None)
 			self.alerted_definitions.pop(d, None)
 
+	def _forms_contain_word(self, forms, word):
+		if isinstance(forms, dict):
+			for value in forms.values():
+				if self._forms_contain_word(value, word):
+					return True
+		elif isinstance(forms, list):
+			if word in forms:
+				return True
+			accentless_word = word.replace('́', '')
+			for form in forms:
+				if form.replace('́', '') == accentless_word:
+					return True
+		return False
+
+	def _usage_contains_form(self, usage):
+		return self._forms_contain_word(usage.get_forms(final_forms=True), self.word)
+
 	def clean_alerted_words(self, dictionary):
 		for d in list(self.alerted_definitions.keys()):
 			alert_info = self.alerted_definitions.get(d)
@@ -149,8 +166,12 @@ class Usage:
 					for candidate in dictionary._find_word_candidates(target):
 						matched_word = dictionary.dict.get(candidate)
 						if matched_word and self.pos in matched_word.usages:
-							# The form entry should resolve into the lemma, not inherit lemma defs.
-							resolved = True
+							lemma_usage = matched_word.usages[self.pos]
+							if self._usage_contains_form(lemma_usage):
+								resolved = True
+								break
+					if resolved:
+						break
 				if resolved:
 					for d in list(self.alerted_definitions.keys()):
 						alert_info = self.alerted_definitions.get(d)
@@ -162,7 +183,7 @@ class Usage:
 					continue
 				if relations - {'form_of'}:
 					continue
-				# fall through for legacy cleanup if form_of resolution failed
+				continue
 			elif relations:
 				continue
 			found_word = ''
@@ -728,6 +749,17 @@ class Dictionary:
 			candidates.add(query)
 		if normalized in self.accentless_words:
 			candidates.update(self.accentless_words[normalized])
+		if candidates:
+			return sorted(candidates)
+
+		print(f"no direct match for '{query}', trying cleaned query")
+		cleaned_query = re.sub(r"\s*\b(pf|impf|perfective|imperfective)\b\s*$", '', query, flags=re.IGNORECASE).strip()
+		if cleaned_query and cleaned_query != query:
+			cleaned_normalized = cleaned_query.replace('́', '')
+			if cleaned_query in self.dict:
+				candidates.add(cleaned_query)
+			if cleaned_normalized in self.accentless_words:
+				candidates.update(self.accentless_words[cleaned_normalized])
 		return sorted(candidates)
 
 	def _matching_deletions(self, query: str) -> List[Dict[str, Optional[str]]]:
