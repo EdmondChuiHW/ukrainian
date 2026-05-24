@@ -7,50 +7,60 @@ from copy import deepcopy
 
 from dictionary import Word, cyrillic
 
+# Prefer a faster JSON parser when available, with a safe json fallback.
+try:
+    import orjson as _fast_json
+except ImportError:
+    try:
+        import ujson as _fast_json
+    except ImportError:
+        _fast_json = json
+
+JSON_PARSER = _fast_json.__name__
+
+def _json_loads(line):
+    return _fast_json.loads(line)
+
 # Resolve paths relative to this module, not CWD
 _ETL_DIR = os.path.dirname(os.path.abspath(__file__))
 
-DATA_DIR = os.environ.get('DATA_DIR', 'data')
+DATA_DIR = os.environ.get('DATA_DIR', 'cache')
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # Caches are deprecated in offline mode
 wiktionary_cache = {}
 inflection_cache = {}
 
-# Dummy viewstate values to avoid live connection on import
-vs, vsg, ev = None, None, None
-
-def get_viewstate(bs=None):
-	return None, None, None
-
-def get_ontolex(use_cache=True):
-	raw_dbnary_path = os.environ.get('RAW_DBNARY_PATH', os.path.join(DATA_DIR, 'raw_dbnary_dump.ttl'))
+def get_ontolex(raw_dbnary_path, use_cache=True):
 	if use_cache and os.path.exists(raw_dbnary_path):
 		return
-	# Offline fallback
 	if not os.path.exists(raw_dbnary_path):
-		print(f"Warning: raw_dbnary_dump.ttl not found at {raw_dbnary_path}.")
+		raise FileNotFoundError(f"{raw_dbnary_path} not found")
 
 
 # Lazy-loaded offline database
 _wiktionary_database = None
+_wiktionary_index = None
+_wiktionary_limit = None
 
-def _ensure_wiktionary_loaded():
-	global _wiktionary_database
+def _build_wiktionary_index(words):
+	index = {
+		'exact': defaultdict(list),
+		'accentless': defaultdict(list),
+	}
+	for w in words:
+		index['exact'][w.word].append(w)
+		index['accentless'][w.get_word_no_accent()].append(w)
+	return index
+
+
+def _ensure_wiktionary_loaded(kaikki_path, limit=None):
+	global _wiktionary_database, _wiktionary_index, _wiktionary_limit
 	if _wiktionary_database is None:
-		_wiktionary_database = load_wiktionary_jsonl()
+		_wiktionary_limit = limit
+		_wiktionary_database = load_wiktionary_jsonl(kaikki_path, limit=limit)
+		_wiktionary_index = _build_wiktionary_index(_wiktionary_database)
 
-def get_lemmas():
-	_ensure_wiktionary_loaded()
-	return list(set(w.word for w in _wiktionary_database))
-
-def get_wiktionary_word(word, use_cache=True):
-	_ensure_wiktionary_loaded()
-	results = []
-	for w in _wiktionary_database:
-		if w.word == word or w.get_word_no_accent() == word.replace("́", ""):
-			results.append(w)
-	return results
 
 def get_additional_adjectival_forms(text):
 	# Corrected adjectival prefix extraction logic
@@ -96,28 +106,26 @@ def get_additional_adjectival_forms(text):
 				results[abbrevs[form[0]]] = get_word(form[1]) + get_word(form[3])
 	return results
 
-
-def parse_wiktionary_table(w, inflections):
-	# Kept for backward compatibility, but unused in offline jsonl mode
-	return {}, None
-
-
-def dump_wiktionary_cache():
-	pass
-
-
-def scrape_inflection(word):
-	return [[None, None, None, None]]
-			
-
-def get_inflection(word, use_cache=True):
+def get_inflection(word, kaikki_path, use_cache=True, limit=None):
 	# Complete offline lookup returning identical schema as live scraper
 	word_spelling = word.word
 	results = []
 	
-	_ensure_wiktionary_loaded()
-	for w in _wiktionary_database:
-		if w.word == word_spelling or w.get_word_no_accent() == word_spelling.replace("́", ""):
+	_ensure_wiktionary_loaded(kaikki_path, limit=limit)
+	word_base = word.get_word_no_accent()
+	lookup_words = []
+	if _wiktionary_index is not None:
+		lookup_words.extend(_wiktionary_index['exact'].get(word_spelling, []))
+		lookup_words.extend(_wiktionary_index['accentless'].get(word_base, []))	
+	else:
+		lookup_words = list(_wiktionary_database)
+
+	seen = set()
+	for w in lookup_words:
+		if w.word in seen:
+			continue
+		seen.add(w.word)
+		if w.word == word_spelling or w.get_word_no_accent() == word_base:
 			for pos, usage in w.usages.items():
 				forms = usage.get_forms()
 				form_type = None
@@ -174,7 +182,7 @@ def get_inflection(word, use_cache=True):
 		'істота': 'animate',
 	}
 
-	no_accent = word_spelling.replace("́", "")
+	no_accent = word_base
 
 	def clean_result(res):
 		if not res or len(res) < 4:
@@ -187,7 +195,7 @@ def get_inflection(word, use_cache=True):
 			
 			if word_info:
 				word_info = ''.join([x for x in word_info if x in cyrillic + "' "])
-				word_info = ' '.join([Word.replace_pos(translations.get(x, x)) for x in word_info.split() if x in translations])
+				word_info = ' '.join([Word.normalize_pos(translations.get(x, x)) for x in word_info.split() if x in translations])
 			else:
 				word_info = ''
 			
@@ -212,8 +220,9 @@ def dump_inflection_cache():
 	pass
 
 
-def get_frequency_list():
-	FREQUENCY_CSV_PATH = os.environ.get('FREQUENCY_CSV_PATH', os.path.join(_ETL_DIR, 'sources', 'publicist_84k_lex_dict_orig.csv'))
+def get_frequency_list(frequency_csv_path):
+	if not os.path.exists(frequency_csv_path):
+		raise FileNotFoundError(f"{frequency_csv_path} not found")
 	
 	parts_of_speech = {
 		'': None, 
@@ -239,11 +248,7 @@ def get_frequency_list():
 		'дієприсл.': 'participle'
 	}
 	data = defaultdict(lambda: {})
-	if not os.path.exists(FREQUENCY_CSV_PATH):
-		print(f"Warning: frequency CSV not found at {FREQUENCY_CSV_PATH}")
-		return data
-		
-	with open(FREQUENCY_CSV_PATH, 'r', encoding='utf-8') as f:
+	with open(frequency_csv_path, 'r', encoding='utf-8') as f:
 		lines = f.read().split('\n')
 		if len(lines) > 0:
 			for line in lines[1:]:
@@ -269,12 +274,41 @@ def _parse_kaikki_entry(entry):
 	word_spelling = entry.get('word')
 	forms = entry.get('forms', [])
 	
-	# Locate canonical accented form if present
-	for f in forms:
-		if 'tags' in f and 'canonical' in f['tags']:
-			word_spelling = f.get('form')
-			break
-			
+	def _strip_stress(text):
+		return text.replace('́', '') if text else text
+
+	def _parse_relation_metadata(source):
+		tags = source.get('tags') or []
+		relations = []
+		targets = []
+		if isinstance(source.get('form_of'), list) and source['form_of']:
+			relations.append('form_of')
+		targets.extend([item.get('word') for item in source.get('form_of', []) if isinstance(item, dict) and item.get('word')])
+		if any(t in ('form-of', 'form_of') for t in tags):
+			relations.append('form_of')
+		if isinstance(source.get('alt_of'), list) and source['alt_of']:
+			relations.append('alt_of')
+		targets.extend([item.get('word') for item in source.get('alt_of', []) if isinstance(item, dict) and item.get('word')])
+		if isinstance(source.get('alt-of'), list) and source['alt-of']:
+			relations.append('alt_of')
+		targets.extend([item.get('word') for item in source.get('alt-of', []) if isinstance(item, dict) and item.get('word')])
+		relation_tags = [t for t in tags if t in ('alternative', 'abbreviation', 'diminutive', 'augmentative', 'comparative', 'dialectal', 'variant', 'contraction')]
+		relations.extend(relation_tags)
+		if relations:
+			priority = ['form_of', 'alt_of', 'abbreviation', 'alternative', 'diminutive', 'augmentative', 'comparative', 'variant', 'contraction']
+			unique_relations = [rel for rel in priority if rel in relations]
+			for rel in relations:
+				if rel not in unique_relations:
+					unique_relations.append(rel)
+			chosen_relation = unique_relations[0]
+			metadata = {
+				'relations': unique_relations,
+				'targets': sorted(set(targets)),
+				'tags': sorted(set(tags)),
+			}
+			return metadata
+		return None
+
 	pos_map = {
 		'noun': 'noun',
 		'verb': 'verb',
@@ -285,26 +319,62 @@ def _parse_kaikki_entry(entry):
 		'conj': 'particle',
 		'part': 'particle',
 		'num': 'numeral',
-		'intj': 'particle'
+		'intj': 'particle',
+		'name': 'noun',
+		'proper noun': 'noun'
 	}
 	raw_pos = entry.get('pos', 'particle')
 	pos = pos_map.get(raw_pos, raw_pos)
-	
+
+	# Preserve the original raw word plus canonical and alternate lexical variants.
+	parsed_spellings = [(word_spelling, pos)]
+	parsed_keys = {(word_spelling, pos)}
+
+	for f in forms:
+		if f.get('source') in ('declension', 'conjugation'):
+			continue
+		candidate = f.get('form')
+		tags = f.get('tags') or []
+		if not candidate or candidate == '-' or 'romanization' in tags:
+			continue
+		if any(tag in tags for tag in ('canonical', 'alternative', 'initialism', 'abbreviation', 'variant', 'diminutive', 'augmentative', 'comparative', 'contraction')):
+			if any(ch in cyrillic for ch in candidate):
+				if (candidate, pos) not in parsed_keys:
+					parsed_spellings.append((candidate, pos))
+					parsed_keys.add((candidate, pos))
+				if any(tag in tags for tag in ('initialism', 'abbreviation')) and pos != 'particle':
+					if (candidate, 'particle') not in parsed_keys:
+						parsed_spellings.append((candidate, 'particle'))
+						parsed_keys.add((candidate, 'particle'))
 	definitions = []
+	entry_metadata = _parse_relation_metadata(entry)
+	def _merge_relation_metadata(base, override):
+		if not base:
+			return override
+		if not override:
+			return base
+		relations = sorted(set(base.get('relations', []) + override.get('relations', [])))
+		targets = sorted(set(base.get('targets', []) + override.get('targets', [])))
+		tags = sorted(set(base.get('tags', []) + override.get('tags', [])))
+		return {
+			'relations': relations,
+			'targets': targets,
+			'tags': tags,
+		}
+
 	for sense in entry.get('senses', []):
 		glosses = sense.get('glosses', [])
+		sense_metadata = _parse_relation_metadata(sense)
+		combined_metadata = _merge_relation_metadata(entry_metadata, sense_metadata)
 		for g in glosses:
-			definitions.append(g)
-			
-	if not definitions:
-		return None
-		
+			alert = bool(combined_metadata)
+			definitions.append({'definition': g, 'alert': alert, 'metadata': combined_metadata})
+	
 	word_info_tags = []
 	for f in forms:
 		if 'tags' in f and 'canonical' in f['tags']:
 			word_info_tags = [t for t in f['tags'] if t != 'canonical']
 			break
-	
 	word_info = ' '.join(word_info_tags) if word_info_tags else ''
 	
 	form_type = None
@@ -349,26 +419,21 @@ def _parse_kaikki_entry(entry):
 						if c_tag in tags:
 							case = c_val
 							break
-					gender = None
+					genders = []
 					if 'plural' in tags:
-						gender = 'ap'
-					elif 'masculine' in tags:
-						gender = 'am'
-					elif 'feminine' in tags:
-						gender = 'af'
-					elif 'neuter' in tags:
-						gender = 'an'
-						
-					if case and gender:
-						key = f"{case} {gender}"
-						forms_dict[key].append(form_val)
-						
-					if 'comparative' in tags:
-						forms_dict['addl comp'].append(form_val)
-					elif 'superlative' in tags:
-						forms_dict['addl super'].append(form_val)
-					elif 'adverb' in tags:
-						forms_dict['addl adv'].append(form_val)
+						genders.append('ap')
+					else:
+						if 'masculine' in tags:
+							genders.append('am')
+						if 'feminine' in tags:
+							genders.append('af')
+						if 'neuter' in tags:
+							genders.append('an')
+					
+					if case and genders:
+						for gender in genders:
+							key = f"{case} {gender}"
+							forms_dict[key].append(form_val)
 						
 				elif form_type == 'verb':
 					if 'infinitive' in tags:
@@ -429,14 +494,38 @@ def _parse_kaikki_entry(entry):
 						elif 'past' in tags:
 							forms_dict['past pas pp'].append(form_val)
 
-	return {
-		'word': word_spelling,
-		'pos': pos,
-		'definitions': definitions,
-		'forms': dict(forms_dict) if forms_dict else None,
-		'form_type': form_type,
-		'info': word_info
-	}
+	parsed_entries = []
+	for ws, ws_pos in parsed_spellings:
+		parsed_entries.append({
+			'word': ws,
+			'pos': ws_pos,
+			'definitions': definitions,
+			'forms': dict(forms_dict) if forms_dict else None,
+			'form_type': form_type,
+			'info': word_info
+		})
+
+	for relation_source in ('related', 'derived'):
+		for item in entry.get(relation_source, []):
+			candidate = item.get('word')
+			if not candidate or not isinstance(candidate, str):
+				continue
+			if any(ch in cyrillic for ch in candidate):
+				candidate_pos = pos
+				if candidate.startswith('-'):
+					candidate_pos = 'combining form'
+				if (candidate, candidate_pos) not in parsed_keys:
+					parsed_entries.append({
+						'word': candidate,
+						'pos': candidate_pos,
+						'definitions': definitions,
+						'forms': None,
+						'form_type': None,
+						'info': word_info
+					})
+					parsed_keys.add((candidate, candidate_pos))
+
+	return parsed_entries if len(parsed_entries) > 1 else parsed_entries[0]
 
 
 def _parse_chunk_worker(lines_chunk):
@@ -445,42 +534,87 @@ def _parse_chunk_worker(lines_chunk):
 		if not line.strip():
 			continue
 		try:
-			entry = json.loads(line)
+			entry = _json_loads(line)
 			if entry.get('lang') == 'Ukrainian':
 				word_data = _parse_kaikki_entry(entry)
 				if word_data:
-					results.append(word_data)
+					if isinstance(word_data, list):
+						results.extend(word_data)
+					else:
+						results.append(word_data)
 		except Exception:
 			pass
 	return results
 
 
-def load_wiktionary_jsonl():
-	kaikki_path = os.environ.get('KAIKKI_PATH', os.path.join(_ETL_DIR, 'sources', 'kaikki.org-dictionary-Ukrainian.jsonl'))
+def _iter_jsonl_chunks(file_path, chunk_size=5000):
+	with open(file_path, 'r', encoding='utf-8') as f:
+		chunk = []
+		for line in f:
+			chunk.append(line)
+			if len(chunk) >= chunk_size:
+				yield chunk
+				chunk = []
+		if chunk:
+			yield chunk
+
+
+def load_wiktionary_jsonl(kaikki_path, limit=None):
 	if not os.path.exists(kaikki_path):
-		print(f"Error: {kaikki_path} not found.")
-		return []
-		
-	print(f"loading wiktionary jsonl from {kaikki_path} (multi-process)")
+		raise FileNotFoundError(f"{kaikki_path} not found")
 	
-	with open(kaikki_path, 'r', encoding='utf-8') as f:
-		lines = f.readlines()
-		
-	num_lines = len(lines)
-	print(f"Total lines to parse: {num_lines}")
-	
+	if limit is not None:
+		print(f"loading wiktionary jsonl from {kaikki_path} (limited to {limit} Ukrainian entries)")
+		words_map = {}
+		processed = 0
+		with open(kaikki_path, 'r', encoding='utf-8') as f:
+			for line in f:
+				if not line.strip():
+					continue
+				try:
+					entry = _json_loads(line)
+				except Exception:
+					continue
+				if entry.get('lang') != 'Ukrainian':
+					continue
+				word_datas = _parse_kaikki_entry(entry)
+				if not word_datas:
+					continue
+				if isinstance(word_datas, dict):
+					word_datas = [word_datas]
+				for word_data in word_datas:
+					word_spelling = word_data['word']
+					pos = word_data['pos']
+					if not word_spelling:
+						continue
+					if word_spelling not in words_map:
+						words_map[word_spelling] = Word(word_spelling)
+					w = words_map[word_spelling]
+					for d in word_data['definitions']:
+						if isinstance(d, dict):
+							alert_value = d.get('metadata') if d.get('alert') else False
+							w.add_definition(pos, d['definition'], alert=alert_value)
+						else:
+							w.add_definition(pos, d)
+					if word_data.get('info'):
+						w.add_info(pos, word_data['info'])
+					if word_data.get('forms') and word_data.get('form_type'):
+						w.add_forms(pos, word_data['forms'], word_data['form_type'])
+				processed += 1
+				if processed >= limit:
+					break
+		return list(words_map.values())
 	chunk_size = 5000
-	chunks = [lines[i:i + chunk_size] for i in range(0, num_lines, chunk_size)]
-	
 	num_cores = max(1, multiprocessing.cpu_count() - 1)
-	print(f"Using {num_cores} worker processes")
+	print(f"Using {JSON_PARSER} parser and {num_cores} worker processes")
 	
 	parsed_entries = []
 	with multiprocessing.Pool(processes=num_cores) as pool:
-		chunk_results = pool.map(_parse_chunk_worker, chunks)
-		for res in chunk_results:
-			parsed_entries.extend(res)
-			
+		for res in pool.imap(_parse_chunk_worker, _iter_jsonl_chunks(kaikki_path, chunk_size), chunksize=1):
+				if isinstance(res, list):
+					parsed_entries.extend(res)
+				elif res:
+					parsed_entries.append(res)
 	print(f"Merging {len(parsed_entries)} entries in main process...")
 	words_map = {}
 	for pe in parsed_entries:
@@ -488,20 +622,21 @@ def load_wiktionary_jsonl():
 		pos = pe['pos']
 		if not word_spelling:
 			continue
-			
+		
 		if word_spelling not in words_map:
 			words_map[word_spelling] = Word(word_spelling)
 			
 		w = words_map[word_spelling]
 		
 		for d in pe['definitions']:
-			w.add_definition(pos, d)
-			
-		if pe['info']:
-			w.add_info(Word.replace_pos(pos), pe['info'])
-			
-		if pe['forms']:
-			w.add_forms(Word.replace_pos(pos), pe['forms'], pe['form_type'])
-			
-	print(f"Extracted {len(words_map)} unique words.")
+			if isinstance(d, dict):
+				alert_value = d.get('metadata') if d.get('alert') else False
+				w.add_definition(pos, d['definition'], alert=alert_value)
+			else:
+				w.add_definition(pos, d)
+
+		if pe.get('info'):
+			w.add_info(pos, pe['info'])
+		if pe.get('forms') and pe.get('form_type'):
+			w.add_forms(pos, pe['forms'], pe['form_type'])
 	return list(words_map.values())

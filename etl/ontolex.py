@@ -3,8 +3,11 @@ import json
 import extract
 from dictionary import Word, Dictionary
 
-DATA_DIR = os.environ.get('DATA_DIR', 'data')
+DATA_DIR = os.environ.get('DATA_DIR', 'cache')
 os.makedirs(DATA_DIR, exist_ok=True)
+
+def _resolve_data_path(loc):
+    return loc if os.path.isabs(loc) else os.path.join(DATA_DIR, loc)
 
 class Ontolex_Word:
 
@@ -60,7 +63,9 @@ class Ontolex_Word:
 
 class Ontolex:
 
-	def __init__(self, use_cache=True, use_raw_cache=True):	
+	def __init__(self, use_cache=True, use_raw_cache=True, raw_dbnary_path=None):	
+		if not raw_dbnary_path:
+			raise ValueError('raw_dbnary_path is required')
 		self.words = {}	
 		cache_path = os.path.join(DATA_DIR, 'ontolex_data.json')
 		if use_cache:
@@ -72,8 +77,8 @@ class Ontolex:
 				return
 			except Exception:
 				pass
-		extract.get_ontolex(use_cache=use_raw_cache)
-		self.parse_ontolex()
+		extract.get_ontolex(use_cache=use_raw_cache, raw_dbnary_path=raw_dbnary_path)
+		self.parse_ontolex(raw_dbnary_path)
 		self.dump('ontolex_data.json', indent=2)
 
 	def get_word(self, word):
@@ -81,12 +86,12 @@ class Ontolex:
 			self.words[word] = Ontolex_Word(word)
 		return self.words[word]
 
-	def parse_ontolex(self):
+	def parse_ontolex(self, raw_dbnary_path=None):
+		if not raw_dbnary_path:
+			raise ValueError('raw_dbnary_path is required')
 		print('parsing ontolex data (streaming mode)')
-		raw_dbnary_path = os.environ.get('RAW_DBNARY_PATH', os.path.join(DATA_DIR, 'raw_dbnary_dump.ttl'))
 		if not os.path.exists(raw_dbnary_path):
-			print(f"Error: {raw_dbnary_path} not found.")
-			return
+			raise FileNotFoundError(f"{raw_dbnary_path} not found")
 		
 		word, new_word, gloss = None, None, None
 		
@@ -126,7 +131,7 @@ class Ontolex:
 									if new_word == word and gloss:
 										part_of_speech = vals[1] if len(vals) > 1 else None
 										self.get_word(word).add_gloss(gloss, part_of_speech)
-				
+
 				if '@uk' in line:
 					parts = line.split('@')
 					if parts:
@@ -148,8 +153,13 @@ class Ontolex:
 		print('parsing complete')
 
 	
-	def get_dictionary(self):
-		dict = Dictionary()
+	def get_dictionary(self, kaikki_path=None, frequency_csv_path=None, deletion_log_path=None, limit=None):
+		dict = Dictionary(
+			kaikki_path=kaikki_path,
+			frequency_csv_path=frequency_csv_path,
+			deletion_log_path=deletion_log_path,
+			limit=limit,
+		)
 		for _, word in self.words.items():
 			translations = word.get_translations()
 			dict.add_to_dictionary(translations)
@@ -162,7 +172,7 @@ class Ontolex:
 		return d
 
 	def dump(self, loc, indent=None):
-		dump_path = os.path.join(DATA_DIR, loc)
+		dump_path = _resolve_data_path(loc)
 		with open(dump_path, 'w+', encoding='utf-8') as f:
 			if indent:
 				f.write(

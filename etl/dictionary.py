@@ -3,13 +3,22 @@ import json
 import re
 from copy import deepcopy
 from collections import defaultdict
+from enum import Enum
+from typing import Dict, List, Optional
 
-import extract
-
-DATA_DIR = os.environ.get('DATA_DIR', 'data')
+DATA_DIR = os.environ.get('DATA_DIR', 'cache')
 os.makedirs(DATA_DIR, exist_ok=True)
 
+def _resolve_data_path(loc):
+    return loc if os.path.isabs(loc) else os.path.join(DATA_DIR, loc)
+
 cyrillic = "ЄІЇАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюяєії"
+
+
+class DeletionReason(Enum):
+	NO_DEFINITIONS = 'no_more_defs'
+	INVALID_INFLECTION = 'invalid_inflection'
+	BAD_POS = 'bad_pos'
 
 class Forms:
 	
@@ -101,8 +110,12 @@ class Usage:
 			self.add_definition(d)
 
 	def add_definition(self, definition, replaced=None, alert=False):
+		metadata = None
+		if isinstance(alert, dict):
+			metadata = alert
+			alert = True
 		if alert:
-			self.alerted_definitions[definition] = replaced
+			self.alerted_definitions[definition] = metadata or {}
 		self.definitions[definition] = replaced
 		# check to ensure definitions are not redundant
 		bad_defs = set()
@@ -120,57 +133,57 @@ class Usage:
 				if d1 != d2 and d1.lower() in new_d.lower():
 					bad_defs.add(d1)
 		for d in bad_defs:
-			del self.definitions[d]
-			if d in self.alerted_definitions:
-				del self.alerted_definitions[d]
+			self.definitions.pop(d, None)
+			self.alerted_definitions.pop(d, None)
 
 	def clean_alerted_words(self, dictionary):
 		for d in list(self.alerted_definitions.keys()):
-			initial_index = None
+			alert_info = self.alerted_definitions.get(d)
+			metadata = alert_info if isinstance(alert_info, dict) else None
+			relations = set()
+			if metadata:
+				relations.update(metadata.get('relations', []))
+			if 'form_of' in relations:
+				resolved = False
+				for target in metadata.get('targets', []):
+					for candidate in dictionary._find_word_candidates(target):
+						matched_word = dictionary.dict.get(candidate)
+						if matched_word and self.pos in matched_word.usages:
+							# The form entry should resolve into the lemma, not inherit lemma defs.
+							resolved = True
+				if resolved:
+					for d in list(self.alerted_definitions.keys()):
+						alert_info = self.alerted_definitions.get(d)
+						metadata = alert_info if isinstance(alert_info, dict) else None
+						relations = set(metadata.get('relations', [])) if metadata else set()
+						if 'form_of' in relations:
+							self.definitions.pop(d, None)
+							self.alerted_definitions.pop(d, None)
+					continue
+				if relations - {'form_of'}:
+					continue
+				# fall through for legacy cleanup if form_of resolution failed
+			elif relations:
+				continue
 			found_word = ''
-			for i, x in enumerate(d):
+			for x in d:
 				if x in cyrillic + ' ' + "'" + "́":
 					found_word = found_word + x
-				if x in cyrillic + "'" + "́" and initial_index is None:
-					initial_index = i
 			found_words = re.sub(r"[^\ẃ]+", ' ', found_word).strip().split()
-			acceptable_forms = [
-				'alternative', 
-				'contraction', 
-				'synonym', 
-				'diminutive', 
-				'initialism', 
-				'endearing',
-				'augmentative',
-				'variant',
-				'comparative',
-				'verbal',
-				'acronym',
-				'equivalent',
-				'abbreviation',
-				'dialectical',
-				'('
-			]
-			if sum([1 if af in d.lower() else 0 for af in acceptable_forms]) > 0:
-				nothing_found = True
-				for found_word in found_words:
-					matched_word = None
-					if found_word in dictionary.dict:
-						matched_word = dictionary.dict[found_word]
-					elif found_word.replace("́", '') in dictionary.dict:
-						matched_word = dictionary.dict[found_word.replace("́", '')]
-					if matched_word:
-						if self.pos in matched_word.usages:
-							self.merge(deepcopy(matched_word.usages[self.pos]), accept_alerts=False, use_other_forms=False)
-						self.add_definition(d)
+			nothing_found = True
+			for found_word in found_words:
+				for candidate in dictionary._find_word_candidates(found_word):
+					matched_word = dictionary.dict.get(candidate)
+					if matched_word and self.pos in matched_word.usages:
+						matched_word.usages[self.pos].merge(deepcopy(self), accept_alerts=False, use_other_forms=False)
 						nothing_found = False
-				if nothing_found and len(self.definitions.keys()) == len(self.alerted_definitions.keys()):
-					del self.definitions[d]
-					del self.alerted_definitions[d]
-			else:
-				del self.definitions[d]
-				del self.alerted_definitions[d]
-	
+						break
+				if not nothing_found:
+					break
+			if nothing_found:
+				self.definitions.pop(d, None)
+				self.alerted_definitions.pop(d, None)
+
 	def add_frequency(self, frequency):
 		self.frequency = frequency
 
@@ -230,14 +243,19 @@ class Usage:
 		added_flag = False
 		new_usages = []
 		self.delete_me = True
+		if all(found_word is None for found_word, *_ in results):
+			# No inflection candidates were found in the Wiktionary lookup.
+			# Preserve the existing usage instead of deleting it when no data is available.
+			self.delete_me = False
+			return False, []
 		for found_word, word_info, forms, form_type in results:
-			if found_word and self.pos and self.pos in word_info:  
+			if found_word:
 				if self.word == found_word: # perfect match!
 					self.add_info(word_info)
 					self.add_forms(forms, form_type)
 					added_flag = True
 					self.delete_me = False
-				else:
+				elif self.pos and self.pos in word_info:
 					this_inflection = get_inflection_positions(self.word) 
 					found_inflection = get_inflection_positions(found_word)
 					if len([x for x in this_inflection if x not in found_inflection]) == 0:  # stress could be elsewhere
@@ -248,7 +266,6 @@ class Usage:
 						new_usage.add_forms(forms, form_type)
 						new_usages.append(new_usage)
 						added_flag = True
-
 			elif force:
 				if self.word == found_word:
 					if self.pos in ('noun', 'verb', 'adjective') and self.pos != form_type:
@@ -338,14 +355,16 @@ class Usage:
 		other_definitions = other.get_definitions()
 		min_length = min(len(these_definitions), len(other_definitions))
 		for pair in zip(self.get_definitions(), other.get_definitions(accept_alerts)):
-			new_usage.add_definition(pair[0], alert=pair[0] in self.alerted_definitions)
-			new_usage.add_definition(pair[1], alert=pair[1] in other.alerted_definitions)
+			self_alert = self.alerted_definitions.get(pair[0], False)
+			other_alert = other.alerted_definitions.get(pair[1], False)
+			new_usage.add_definition(pair[0], alert=self_alert)
+			new_usage.add_definition(pair[1], alert=other_alert)
 		if len(these_definitions) > len(other_definitions):
 			for d in these_definitions[-1 * (len(these_definitions) - min_length):]:
-				new_usage.add_definition(d, alert=d in self.alerted_definitions)
+				new_usage.add_definition(d, alert=self.alerted_definitions.get(d, False))
 		elif len(other_definitions) > len(these_definitions):
 			for d in other_definitions[-1 * (len(other_definitions) - min_length):]:
-				new_usage.add_definition(d, alert=d in other.alerted_definitions)
+				new_usage.add_definition(d, alert=other.alerted_definitions.get(d, False))
 		self.definitions = new_usage.definitions
 		self.alerted_definitions = new_usage.alerted_definitions
 		if use_other_forms:
@@ -373,9 +392,10 @@ class Word:
 		if word == "будова (bud'''o'''wa)":
 			word = 'будова'
 		self.word = word
+		self.word_no_accent = self.word.replace("́", "")
 		self.usages = {}
 
-	def replace_pos(pos):
+	def normalize_pos(pos):
 		replace = {
 			'conjunction': 'particle',
 			'determiner': 'particle',
@@ -387,6 +407,7 @@ class Word:
 			'predicative': 'particle',
 			'preposition': 'particle',
 			'prepositional phrase': 'phrase',
+			'name': 'noun',
 			'proper noun': 'noun',
 		}
 		if pos in replace:
@@ -396,9 +417,9 @@ class Word:
 		return pos
 
 	def get_word_no_accent(self):
-		return self.word.replace("́", "")
+		return self.word_no_accent
 
-	def add_definition(self, pos, definition):
+	def add_definition(self, pos, definition, alert=False):
 		if pos is None:
 			pos = 'particle'
 		if pos == 'verb' and len(definition.split()) == 1:
@@ -434,7 +455,7 @@ class Word:
 
 		replaced = pos
 
-		pos = Word.replace_pos(pos)
+		pos = Word.normalize_pos(pos)
 		if pos == replaced:
 			replaced = None
 
@@ -443,13 +464,7 @@ class Word:
 		else:
 			u = Usage(self.word, pos)
 			self.usages[pos] = u
-		if ' of ' in definition and definition.split(' of ')[1][0] in cyrillic:
-			if ':' in definition or ';' in definition:
-				u.add_definition(definition, replaced=replaced, alert=False)
-			else:
-				u.add_definition(definition, replaced=replaced, alert=True)
-		else:
-			u.add_definition(definition, replaced=replaced, alert=False)
+		u.add_definition(definition, replaced=replaced, alert=alert)
 
 	def merge(self, other):
 		for pos, usage in other.usages.items():
@@ -463,23 +478,31 @@ class Word:
 			usage.clean_alerted_words(dictionary)
 
 	def garbage_collect(self):
+		deleted = []
 		for pos in list(self.usages.keys()):
 			usage = self.usages[pos]
 			if len(usage.definitions.keys()) == 0 or usage.delete_me or pos in ('suffix', 'prefix'):
 				if(len(usage.definitions.keys()) == 0):
-					print(f'DELETING: {self.word}, {pos} - reason: no more definitions')
+					reason = DeletionReason.NO_DEFINITIONS
 				elif usage.delete_me:
-					print(f'DELETING: {self.word}, {pos} - reason: said to delete')
+					reason = DeletionReason.INVALID_INFLECTION
 				elif pos in ('suffix', 'prefix'):
-					print(f'DELETING: {self.word}, {pos} - reason: bad pos')
+					reason = DeletionReason.BAD_POS
+				deleted.append({
+					'type': 'usage',
+					'word': self.word,
+					'pos': pos,
+					'reason': reason.value,
+					'word_obj': self,
+				})
 				del self.usages[pos]
+		return deleted
 
 	def add_frequencies(self, frequencies):
 		normalized_freqs = {}
 		if frequencies:
 			for pos, rank in frequencies.items():
-				normalized_freqs[Word.replace_pos(pos)] = rank
-				
+				normalized_freqs[Word.normalize_pos(pos)] = rank
 		for pos, usage in self.usages.items():
 			if normalized_freqs and pos in normalized_freqs:
 				usage.add_frequency(normalized_freqs[pos])
@@ -487,15 +510,14 @@ class Word:
 				usage.add_frequency(None)
 
 	def add_info(self, pos, word_info):
-		if not pos:
-			pos = 'particle'
+		pos = Word.normalize_pos(pos)
 		if pos in self.usages:
 			self.usages[pos].add_info(word_info)
-		
+
 	def add_forms(self, pos, forms, form_type):
-		if not pos:
-			pos = 'particle'
-		self.usages[pos].add_forms(forms, form_type)
+		pos = Word.normalize_pos(pos)
+		if pos in self.usages:
+			self.usages[pos].add_forms(forms, form_type)
 
 	def add_inflections(self, results):
 		needs_flag = True
@@ -528,43 +550,47 @@ class Word:
 
 class Dictionary:
 
-	def __init__(self):
+	def __init__(self, kaikki_path=None, frequency_csv_path=None, deletion_log_path=None, limit=None):
+		if not kaikki_path:
+			raise ValueError('kaikki_path is required')
+		if not frequency_csv_path:
+			raise ValueError('frequency_csv_path is required')
 		self.dict = {}
 		self.accentless_words = defaultdict(lambda: set())
+		self.kaikki_path = kaikki_path
+		self.frequency_csv_path = frequency_csv_path
+		self.deletion_log_path = deletion_log_path
+		self.limit = limit
+		self.deletions = []
 
 	def _handle_no_accent(self, to_add, no_accent):
+		existing_keys = list(self.accentless_words[no_accent])
 		if no_accent == to_add.word:
-			# Only merge if we find an exact matching key in the dictionary
-			existing_keys = list(self.accentless_words[no_accent])
-			exact_match = None
+			# Accentless entries should merge into an existing accented candidate,
+			# unless no accented variant exists yet.
+			if no_accent in self.dict:
+				self.dict[no_accent].merge(to_add)
+				return
+
 			for k in existing_keys:
-				if k == to_add.word:
-					exact_match = k
-					break
-			if exact_match:
-				self.dict[exact_match].merge(to_add)
-			else:
-				# Keep it distinct and write to its own spelling key
-				self.dict[to_add.word] = to_add
-				self.accentless_words[no_accent].add(to_add.word)
-		else:
-			# Stressed word replacing/migrating unstressed placeholder
-			added_flag = False
-			for e in list(self.accentless_words[no_accent]):
-				existant_word = self.dict[e]
-				existant_word_no_accent = existant_word.get_word_no_accent()
-				if existant_word_no_accent == e and not added_flag:
-					to_add.merge(existant_word)
-					self.dict.pop(e)
-					self.accentless_words[no_accent].remove(e)
-					if len(self.accentless_words[no_accent]) == 0:
-						self.accentless_words.pop(no_accent)
-					self.dict[to_add.word] = to_add	
+				if k != no_accent and k in self.dict:
+					self.dict[k].merge(to_add)
 					self.accentless_words[no_accent].add(to_add.word)
-					added_flag = True
-			if not added_flag:
-				self.dict[to_add.word] = to_add
-				self.accentless_words[no_accent].add(to_add.word)
+					return
+
+			self.dict[to_add.word] = to_add
+			self.accentless_words[no_accent].add(to_add.word)
+		else:
+			# If an accentless-only placeholder already exists, merge it into the
+			# new accented variant instead of keeping a separate word key.
+			if no_accent in self.dict:
+				accentless_entry = self.dict[no_accent]
+				to_add.merge(accentless_entry)
+				del self.dict[no_accent]
+				self.accentless_words[no_accent].discard(no_accent)
+
+			self.dict[to_add.word] = to_add
+			self.accentless_words[no_accent].add(to_add.word)
 
 	def _add_word_to_dictionary(self, to_add):
 		if to_add.word in self.dict:
@@ -585,10 +611,11 @@ class Dictionary:
 				self._add_word_to_dictionary(w)
 
 	def add_wiktionary_words(self):
+		import extract
 		print("adding wiktionary words")
 		print('parsing wiktionary data from jsonl')
 		try:
-			words = extract.load_wiktionary_jsonl()
+			words = extract.load_wiktionary_jsonl(self.kaikki_path, limit=self.limit)
 			for w in words:
 				self.add_to_dictionary(w)
 		except Exception as e:
@@ -607,13 +634,21 @@ class Dictionary:
 	def garbage_collect(self):
 		for w in list(self.dict.keys()):
 			word = self.dict[w]
-			word.garbage_collect()
+			deleted = word.garbage_collect()
+			self.deletions.extend(deleted)
 			if len(word.usages.keys()) == 0:
-				print(f'DELETING WORD: {w}')
+				self.deletions.append({
+					'type': 'word',
+					'word': w,
+					'pos': None,
+					'reason': DeletionReason.NO_DEFINITIONS.value,
+					'word_obj': word,
+				})
 				del self.dict[w]
 
 	def add_frequencies(self):
-		frequencies = extract.get_frequency_list()
+		import extract
+		frequencies = extract.get_frequency_list(self.frequency_csv_path)
 		for _, word in self.dict.items():
 			if word.get_word_no_accent() in frequencies:
 				word.add_frequencies(frequencies[word.get_word_no_accent()])
@@ -621,6 +656,7 @@ class Dictionary:
 				word.add_frequencies(None)
 
 	def get_inflections(self):
+		import extract
 		print("getting inflections")
 		try:
 			n = len(self.dict.values())
@@ -628,7 +664,7 @@ class Dictionary:
 				if i % 1000 == 0:
 					print(f"{i} of {n}")
 				w = self.dict[word]
-				results = extract.get_inflection(w)
+				results = extract.get_inflection(w, self.kaikki_path, limit=self.limit)
 				new_usages = w.add_inflections(results)
 				for n_u in new_usages:
 					new_w = Word(n_u.word)
@@ -644,6 +680,85 @@ class Dictionary:
 		for k, v in self.dict.items():
 			dict[k] = v.get_dict()
 		return dict
+
+	def write_deletion_log(self):
+		if not self.deletion_log_path:
+			return
+
+		serializable_deletions = []
+		filtered_deletions = []
+		for deletion in self.deletions:
+			entry = {k: v for k, v in deletion.items() if k != 'word_obj'}
+			serializable_deletions.append(entry)
+			if not self._should_filter_deletion(deletion):
+				filtered_deletions.append(entry)
+
+		with open(self.deletion_log_path, 'w', encoding='utf-8') as f:
+			json.dump(serializable_deletions, f, ensure_ascii=False, indent=2)
+
+		filtered_path = self._get_filtered_deletion_path()
+		with open(filtered_path, 'w', encoding='utf-8') as f:
+			json.dump(filtered_deletions, f, ensure_ascii=False, indent=2)
+
+		print(
+			f"wrote {len(serializable_deletions)} deletions to {self.deletion_log_path} "
+			f"and {len(filtered_deletions)} filtered deletions to {filtered_path}"
+		)
+
+	def _get_filtered_deletion_path(self):
+		base = os.path.splitext(self.deletion_log_path)[0]
+		return f"{base}.filtered.json"
+
+	def _should_filter_deletion(self, deletion):
+		word_obj = deletion.get('word_obj')
+		if not word_obj:
+			return False
+		accentless = word_obj.get_word_no_accent()
+		if accentless not in self.accentless_words:
+			return False
+		for candidate in self.accentless_words[accentless]:
+			if candidate in self.dict:
+				return True
+		return False
+
+	def _find_word_candidates(self, query: str) -> List[str]:
+		normalized = query.replace('́', '')
+		candidates = set()
+		if query in self.dict:
+			candidates.add(query)
+		if normalized in self.accentless_words:
+			candidates.update(self.accentless_words[normalized])
+		return sorted(candidates)
+
+	def _matching_deletions(self, query: str) -> List[Dict[str, Optional[str]]]:
+		normalized = query.replace('́', '')
+		return [
+			deletion for deletion in self.deletions
+			if deletion['word'] == query or deletion['word'].replace('́', '') == normalized
+		]
+
+	def get_debug_info(self, query_words: List[str]) -> Dict[str, object]:
+		return {
+			'word_count': len(self.dict),
+			'final_form_count': len(self.get_final_forms()),
+			'queries': [
+				{
+					'query': query,
+					'candidates': [
+						{
+							'word': candidate,
+							'usages': {
+								pos: usage.get_dict(final_forms=True)
+								for pos, usage in self.dict[candidate].usages.items()
+							}
+						}
+					for candidate in self._find_word_candidates(query)
+					if candidate in self.dict
+				],
+				'deletions': self._matching_deletions(query),
+			}
+			for query in query_words
+		]}
 
 	def get_final_forms(self):
 		result = []
@@ -687,7 +802,7 @@ class Dictionary:
 		for i in word_part:
 			word_part[i] = list(word_part[i])
 
-		with open(os.path.join(DATA_DIR, loc1), 'w+', encoding='utf-8') as f:
+		with open(_resolve_data_path(loc1), 'w+', encoding='utf-8') as f:
 			if indent:
 				f.write(
 					json.dumps(word_index_list, indent=indent, ensure_ascii=False)
@@ -697,7 +812,7 @@ class Dictionary:
 					json.dumps(word_index_list, ensure_ascii=False)
 				)
 
-		with open(os.path.join(DATA_DIR, loc2), 'w+', encoding='utf-8') as f:
+		with open(_resolve_data_path(loc2), 'w+', encoding='utf-8') as f:
 			if indent:
 				f.write(
 					json.dumps(word_part, indent=indent, ensure_ascii=False)
@@ -713,7 +828,7 @@ class Dictionary:
 		else:
 			data = self.get_dict()
 
-		with open(os.path.join(DATA_DIR, loc), 'w+', encoding='utf-8') as f:
+		with open(_resolve_data_path(loc), 'w+', encoding='utf-8') as f:
 			if indent:
 				f.write(
 					json.dumps(data, indent=indent, ensure_ascii=False)

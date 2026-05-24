@@ -1,6 +1,11 @@
 etl/data/*
 etl/__pycache__/*
 
+etl/cache/*
+etl/output/*
+
+.tmp/*
+
 # Logs
 logs
 *.log
