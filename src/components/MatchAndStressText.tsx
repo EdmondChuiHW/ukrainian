@@ -49,10 +49,11 @@ function useMatchHighlight(text: string, matchTerm?: string) {
   const matchIndexes: [number, number][] = [];
   if (!matchTerm) return matchIndexes;
 
-  const matches = text.matchAll(new RegExp(RegExp.escape(matchTerm), 'gi'));
+  const noAccents = matchTerm.replaceAll(ACCENT_MARK, '');
+  const matches = text.matchAll(new RegExp(RegExp.escape(noAccents), 'gi'));
 
   for (const match of matches) {
-    matchIndexes.push([match.index, match.index + matchTerm.length]);
+    matchIndexes.push([match.index, match.index + noAccents.length]);
   }
 
   return matchIndexes;
