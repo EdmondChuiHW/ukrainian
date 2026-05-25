@@ -4,6 +4,7 @@ import { getHighlight } from './utils';
 interface MatchAndStressTextProps {
   text: string;
   matchTerm?: string;
+  lang?: string;
 }
 
 const ACCENT_MARK = '\u0301';
@@ -11,6 +12,7 @@ const ACCENT_MARK = '\u0301';
 export const MatchAndStressText: React.FC<MatchAndStressTextProps> = ({
   text,
   matchTerm,
+  lang = 'uk',
 }) => {
   const ref = React.useRef<HTMLSpanElement>(null);
 
@@ -22,7 +24,11 @@ export const MatchAndStressText: React.FC<MatchAndStressTextProps> = ({
   useHighlightRanges('search-match', ref, matchIndexes);
   useHighlightRanges('stress', ref, stressIndexes);
 
-  return <span ref={ref}>{normalizedText}</span>;
+  return (
+    <span ref={ref} aria-label={text} lang={lang}>
+      {normalizedText}
+    </span>
+  );
 };
 
 function useStressHighlight(text: string) {
