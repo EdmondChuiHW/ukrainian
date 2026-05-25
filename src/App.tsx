@@ -29,6 +29,7 @@ export interface RawDictionaryEntry {
   info?: string;
   defs?: string[];
   forms?: unknown;
+  variants?: string[];
   freq?: number;
   index?: number;
 }
@@ -73,14 +74,18 @@ const buildIndex = (
   const formTokens = extractTextArray(entry.forms)
     .map((val) => normalizeText(val))
     .filter(Boolean);
-  const normalizedForms = formTokens.join(' ');
+  const variantTokens = extractTextArray(entry.variants)
+    .map((val) => normalizeText(val))
+    .filter(Boolean);
+  const normalizedFormTokens = [...formTokens, ...variantTokens];
+  const normalizedForms = normalizedFormTokens.join(' ');
   return {
     ...entry,
     index,
     normalizedWord: normalizeText(entry.word),
     normalizedDefs: normalizeText(entry.defs?.join(' ') ?? ''),
     normalizedForms,
-    normalizedFormTokens: formTokens,
+    normalizedFormTokens,
   };
 };
 
