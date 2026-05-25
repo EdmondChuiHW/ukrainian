@@ -15,10 +15,12 @@ export const MatchAndStressText: React.FC<MatchAndStressTextProps> = ({
   const ref = React.useRef<HTMLSpanElement>(null);
 
   const [stressIndexes, normalizedText] = useStressHighlight(text);
-  useHighlightRanges('stress', ref, stressIndexes);
-
   const matchIndexes = useMatchHighlight(normalizedText, matchTerm);
+
+  // In Safari, the order of insertion matters,
+  // i.e. `stress` must come after `search-match` if we want `stress` to be on top
   useHighlightRanges('search-match', ref, matchIndexes);
+  useHighlightRanges('stress', ref, stressIndexes);
 
   return <span ref={ref}>{normalizedText}</span>;
 };

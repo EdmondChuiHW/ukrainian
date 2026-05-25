@@ -460,7 +460,6 @@ button {
 
 ::highlight(search-match) {
   background: rgba(93, 144, 255, 0.35);
-  color: inherit;
   padding: 0;
   padding-block: 0.15rem;
   border-radius: 0.15rem;
