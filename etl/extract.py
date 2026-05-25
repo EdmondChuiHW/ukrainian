@@ -358,7 +358,7 @@ def _parse_kaikki_entry(entry):
 		tags = f.get('tags') or []
 		if not candidate or candidate == '-' or 'romanization' in tags:
 			continue
-		if any(tag in tags for tag in ('canonical', 'alternative', 'initialism', 'abbreviation', 'variant', 'diminutive', 'augmentative', 'comparative', 'contraction')):
+		if any(tag in tags for tag in ('canonical', 'alternative', 'initialism', 'abbreviation', 'variant', 'diminutive', 'augmentative', 'contraction')):
 			if any(ch in cyrillic for ch in candidate):
 				if (candidate, pos) not in parsed_keys:
 					parsed_spellings.append((candidate, pos))
@@ -367,6 +367,39 @@ def _parse_kaikki_entry(entry):
 					if (candidate, 'particle') not in parsed_keys:
 						parsed_spellings.append((candidate, 'particle'))
 						parsed_keys.add((candidate, 'particle'))
+
+	# Collapse accent-only canonical variants into a single representative entry,
+	# preserving alternate stress patterns as neutral variant metadata.
+	grouped_spellings = defaultdict(list)
+	for candidate, candidate_pos in parsed_spellings:
+		grouped_spellings[(candidate.replace('́', ''), candidate_pos)].append(candidate)
+
+	collapsed_spellings = []
+	for (base, candidate_pos), spellings in grouped_spellings.items():
+		unique_spellings = []
+		for candidate in spellings:
+			if candidate not in unique_spellings:
+				unique_spellings.append(candidate)
+
+		# If the raw lemma is accentless but there are accented canonical forms for
+		# the same base, drop the raw accentless lemma from the group.
+		if word_spelling.replace('́', '') == word_spelling:
+			accented_candidates = [x for x in unique_spellings if x.replace('́', '') != x]
+			if accented_candidates and word_spelling in unique_spellings:
+				unique_spellings = [x for x in unique_spellings if x != word_spelling]
+
+		if len(unique_spellings) > 1:
+			if word_spelling in unique_spellings:
+				primary = word_spelling
+			else:
+				accented_candidates = [x for x in unique_spellings if x.replace('́', '') != x]
+				primary = accented_candidates[0] if accented_candidates else unique_spellings[0]
+			variants = [x for x in unique_spellings if x != primary]
+			collapsed_spellings.append((primary, candidate_pos, variants))
+		else:
+			collapsed_spellings.append((unique_spellings[0], candidate_pos, []))
+
+	parsed_spellings = collapsed_spellings
 	definitions = []
 	entry_metadata = _parse_relation_metadata(entry)
 	def _merge_relation_metadata(base, override):
@@ -392,10 +425,21 @@ def _parse_kaikki_entry(entry):
 			definitions.append({'definition': g, 'alert': alert, 'metadata': combined_metadata})
 	
 	word_info_tags = []
+	def add_word_info_tags(tags):
+		for tag in tags or []:
+			if tag == 'canonical':
+				continue
+			if tag not in word_info_tags:
+				word_info_tags.append(tag)
+
 	for f in forms:
 		if 'tags' in f and 'canonical' in f['tags']:
-			word_info_tags = [t for t in f['tags'] if t != 'canonical']
+			add_word_info_tags(f['tags'])
 			break
+	if entry_metadata:
+		add_word_info_tags(entry_metadata.get('tags'))
+	for sense in entry.get('senses', []):
+		add_word_info_tags(sense.get('tags'))
 	word_info = ' '.join(word_info_tags) if word_info_tags else ''
 	
 	form_type = None
@@ -410,12 +454,17 @@ def _parse_kaikki_entry(entry):
 	
 	if form_type:
 		for f in forms:
-			if f.get('source') in ('declension', 'conjugation') and 'tags' in f:
+			tags = f.get('tags') or []
+			form_val = f.get('form')
+			if not form_val or form_val == '-':
+				continue
+
+			source = f.get('source')
+			if source in ('declension', 'conjugation') and 'tags' in f:
 				tags = f['tags']
-				form_val = f.get('form')
 				if not form_val or form_val == '-':
 					continue
-					
+
 				if form_type == 'noun':
 					cases = {'nominative': 'nom', 'genitive': 'gen', 'dative': 'dat', 'accusative': 'acc', 'instrumental': 'ins', 'locative': 'loc', 'vocative': 'voc'}
 					case = None
@@ -428,11 +477,11 @@ def _parse_kaikki_entry(entry):
 						num = 's'
 					elif 'plural' in tags:
 						num = 'p'
-					
+
 					if case and num:
 						key = f"{case} n{num}"
 						forms_dict[key].append(form_val)
-						
+
 				elif form_type == 'adj':
 					cases = {'nominative': 'nom', 'genitive': 'gen', 'dative': 'dat', 'accusative': 'acc', 'instrumental': 'ins', 'locative': 'loc', 'vocative': 'voc'}
 					case = None
@@ -450,12 +499,12 @@ def _parse_kaikki_entry(entry):
 							genders.append('af')
 						if 'neuter' in tags:
 							genders.append('an')
-					
+
 					if case and genders:
 						for gender in genders:
 							key = f"{case} {gender}"
 							forms_dict[key].append(form_val)
-						
+
 				elif form_type == 'verb':
 					if 'infinitive' in tags:
 						forms_dict['inf'].append(form_val)
@@ -498,7 +547,7 @@ def _parse_kaikki_entry(entry):
 							forms_dict['past fs'].append(form_val)
 						elif 'neuter' in tags:
 							forms_dict['past ns'].append(form_val)
-							
+
 					if 'adverbial' in tags:
 						if 'present' in tags:
 							forms_dict['pres adv pp'].append(form_val)
@@ -514,12 +563,21 @@ def _parse_kaikki_entry(entry):
 							forms_dict['pres pas pp'].append(form_val)
 						elif 'past' in tags:
 							forms_dict['past pas pp'].append(form_val)
-
+			elif form_type == 'adj' and any(tag in tags for tag in ('comparative', 'superlative', 'argumentative', 'adverb')):
+				if 'comparative' in tags:
+					forms_dict['addl comp'].append(form_val)
+				if 'superlative' in tags:
+					forms_dict['addl super'].append(form_val)
+				if 'argumentative' in tags:
+					forms_dict['addl arg'].append(form_val)
+				if 'adverb' in tags:
+					forms_dict['addl adv'].append(form_val)
 	parsed_entries = []
-	for ws, ws_pos in parsed_spellings:
+	for ws, ws_pos, variants in parsed_spellings:
 		parsed_entries.append({
 			'word': ws,
 			'pos': ws_pos,
+			'variants': variants or None,
 			'definitions': definitions,
 			'forms': dict(forms_dict) if forms_dict else None,
 			'form_type': form_type,
@@ -587,7 +645,7 @@ def load_wiktionary_jsonl(kaikki_path):
 	chunk_size = 5000
 	num_cores = max(1, multiprocessing.cpu_count() - 1)
 	print(f"Using {JSON_PARSER} parser and {num_cores} worker processes")
-	
+
 	parsed_entries = []
 	with multiprocessing.Pool(processes=num_cores) as pool:
 		for res in pool.imap(_parse_chunk_worker, _iter_jsonl_chunks(kaikki_path, chunk_size), chunksize=1):
@@ -602,12 +660,12 @@ def load_wiktionary_jsonl(kaikki_path):
 		pos = pe['pos']
 		if not word_spelling:
 			continue
-		
+
 		if word_spelling not in words_map:
 			words_map[word_spelling] = Word(word_spelling)
-			
-		w = words_map[word_spelling]
 		
+		w = words_map[word_spelling]
+
 		for d in pe['definitions']:
 			if isinstance(d, dict):
 				alert_value = d.get('metadata') if d.get('alert') else False
@@ -615,6 +673,8 @@ def load_wiktionary_jsonl(kaikki_path):
 			else:
 				w.add_definition(pos, d)
 
+		if pe.get('variants'):
+			w.add_variants(pe['variants'])
 		if pe.get('info'):
 			w.add_info(pos, pe['info'])
 		if pe.get('forms') and pe.get('form_type'):

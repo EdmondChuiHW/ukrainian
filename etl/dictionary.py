@@ -215,16 +215,16 @@ class Usage:
 	def get_info(self):
 		gender, aspect, animacy = set(), set(), set()
 		for info in self.info:
-			for word in info.split():
-				if word in ('f', 'female'):
+			for word in info.lower().split():
+				if word in ('f', 'female', 'feminine'):
 					gender.add('female')
-				if word in ('m', 'male'):
+				if word in ('m', 'male', 'masculine'):
 					gender.add('male')
-				if word in ('animal', 'animate'):
+				if word in ('animal', 'animate', 'anim'):
 					animacy.add('animate')
 				if word in ('n', 'neuter'):
 					gender.add('neuter')
-				if word in ('inan'):
+				if word in ('inan', 'inanimate'):
 					animacy.add('inanimate')
 				if word in ('imperfective', 'impf'):
 					aspect.add('imperfective')
@@ -272,10 +272,11 @@ class Usage:
 		for found_word, word_info, forms, form_type in results:
 			if found_word:
 				if self.word == found_word: # perfect match!
-					self.add_info(word_info)
-					self.add_forms(forms, form_type)
-					added_flag = True
-					self.delete_me = False
+					if self.pos == form_type or self.pos in word_info:
+						self.add_info(word_info)
+						self.add_forms(forms, form_type)
+						added_flag = True
+						self.delete_me = False
 				elif self.pos and self.pos in word_info:
 					this_inflection = get_inflection_positions(self.word) 
 					found_inflection = get_inflection_positions(found_word)
@@ -415,6 +416,7 @@ class Word:
 		self.word = word
 		self.word_no_accent = self.word.replace("́", "")
 		self.usages = {}
+		self.variants = []
 
 	def normalize_pos(pos):
 		replace = {
@@ -487,12 +489,25 @@ class Word:
 			self.usages[pos] = u
 		u.add_definition(definition, replaced=replaced, alert=alert)
 
+	def add_variants(self, variants):
+		if not variants:
+			return
+		for variant in variants:
+			if variant and variant != self.word and variant not in self.variants:
+				self.variants.append(variant)
+
+	def add_variant(self, variant):
+		self.add_variants([variant])
+
 	def merge(self, other):
 		for pos, usage in other.usages.items():
 			if pos in self.usages:
 				self.usages[pos].merge(usage)
 			else:
 				self.usages[pos] = usage
+		self.add_variants(other.variants)
+		if other.word != self.word:
+			self.add_variant(other.word)
 
 	def clean_alerted_words(self, dictionary):
 		for _, usage in self.usages.items():
@@ -558,6 +573,11 @@ class Word:
 		results = []
 		for pos, usage in self.usages.items():
 			result = {'word': self.word, 'pos': pos}
+			if self.variants:
+				result['variants'] = sorted(
+					set(self.variants),
+					key=lambda x: (x.replace('́', ''), x),
+				)
 			result = {**result, **usage.get_dict(final_forms=True)}
 			results.append(result)
 		return results
@@ -595,6 +615,7 @@ class Dictionary:
 			for k in existing_keys:
 				if k != no_accent and k in self.dict:
 					self.dict[k].merge(to_add)
+					self.dict[k].add_variant(to_add.word)
 					self.accentless_words[no_accent].add(to_add.word)
 					return
 
@@ -606,6 +627,7 @@ class Dictionary:
 			if no_accent in self.dict:
 				accentless_entry = self.dict[no_accent]
 				to_add.merge(accentless_entry)
+				to_add.add_variant(accentless_entry.word)
 				del self.dict[no_accent]
 				self.accentless_words[no_accent].discard(no_accent)
 

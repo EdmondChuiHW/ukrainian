@@ -114,6 +114,26 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertFalse(needs_inflection)
         self.assertEqual(new_usages, [])
 
+    def test_add_inflection_does_not_apply_mismatched_pos_forms(self):
+        import dictionary
+
+        word = dictionary.Word('зеле́ний')
+        word.add_definition('noun', 'green (colour)')
+        usage = word.usages['noun']
+
+        results = [[
+            'зеле́ний',
+            'adjective',
+            {'nom am': ['зеле́ний']},
+            'adj'
+        ]]
+
+        needs_inflection, new_usages = usage.add_inflection(results)
+
+        self.assertEqual(usage.get_forms(), {})
+        self.assertEqual(usage.definitions, {'green (colour)': None})
+        self.assertEqual(new_usages, [])
+
     def test_load_wiktionary_jsonl_preserves_forms_info_and_alerts(self):
         import extract
 
@@ -148,11 +168,11 @@ class TestUkrainianETL(unittest.TestCase):
         }
 
         parsed = extract._parse_kaikki_entry(entry)
-        self.assertIsInstance(parsed, list)
-        self.assertEqual({p['word'] for p in parsed}, {'зокрема', 'зокре́ма', 'зокрема́'})
-        self.assertEqual(parsed[0]['pos'], 'adverb')
-        self.assertEqual(parsed[1]['pos'], 'adverb')
-        self.assertEqual(parsed[2]['pos'], 'adverb')
+        self.assertIsInstance(parsed, dict)
+        self.assertEqual(parsed['word'], 'зокре́ма')
+        self.assertEqual(parsed['pos'], 'adverb')
+        self.assertEqual(parsed['variants'], ['зокрема́'])
+        self.assertNotIn('зокрема', [parsed['word'], *parsed['variants']])
 
     def test_parse_kaikki_entry_allows_form_for_multiple_adjective_genders(self):
         import extract
@@ -182,10 +202,35 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertEqual(parsed['forms']['loc am'], ['Є́льському'])
         self.assertEqual(parsed['forms']['loc an'], ['Є́льському'])
 
+    def test_usage_get_info_handles_masculine_inanimate_tags(self):
+        import dictionary
+
+        usage = dictionary.Usage('час', 'noun')
+        usage.add_info('masculine inanimate')
+
+        self.assertEqual(usage.get_info(), 'male, inanimate')
+
+    def test_parse_kaikki_entry_uses_sense_tags_for_info(self):
+        import extract
+
+        entry = {
+            'word': 'час',
+            'pos': 'noun',
+            'forms': [
+                {'form': 'час', 'tags': ['canonical']}
+            ],
+            'senses': [
+                {'glosses': ['time'], 'tags': ['inanimate', 'masculine']}
+            ]
+        }
+
+        parsed = extract._parse_kaikki_entry(entry)
+        self.assertEqual(set(parsed['info'].split()), {'masculine', 'inanimate'})
+
     def test_form_of_word_is_removed_after_merge(self):
         import extract, dictionary
 
-        source = Path('etl/sources/kaikki.org-dictionary-Ukrainian.jsonl')
+        source = Path(__file__).resolve().parent / 'sources' / 'kaikki.org-dictionary-Ukrainian.jsonl'
         parent = None
         entry = None
         with source.open('r', encoding='utf-8') as f:
@@ -296,6 +341,17 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertIn('dat am', d.dict['Є́льський'].usages['adjective'].get_forms())
         self.assertIn('voc am', d.dict['Є́льський'].usages['adjective'].get_forms())
 
+    def test_word_final_form_includes_variants(self):
+        import dictionary
+
+        word = dictionary.Word('зокре́ма')
+        word.add_definition('adverb', 'in particular')
+        word.add_variants(['зокрема́'])
+
+        final_forms = word.get_final_form()
+        self.assertEqual(len(final_forms), 1)
+        self.assertEqual(final_forms[0]['variants'], ['зокрема́'])
+
     def test_parse_kaikki_entry_alert_definition_flag(self):
         import extract
 
@@ -328,6 +384,28 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertIn('alt-of', parsed['definitions'][0]['metadata']['tags'])
         self.assertNotIn('relation', parsed['definitions'][0]['metadata'])
 
+    def test_parse_kaikki_entry_skips_related_derived_candidates(self):
+        import extract
+
+        entry = {
+            'word': 'допомога',
+            'pos': 'noun',
+            'senses': [{'glosses': ['help, assistance, aid']}],
+            'forms': [{'form': 'допомога', 'tags': ['canonical']}],
+            'related': [{'word': 'допомогти́', 'tags': ['perfective']}],
+        }
+
+        parsed = extract._parse_kaikki_entry(entry)
+        self.assertIsInstance(parsed, list)
+        self.assertEqual(len(parsed), 2)
+        self.assertEqual(parsed[0]['word'], 'допомога')
+        self.assertEqual(parsed[0]['pos'], 'noun')
+        self.assertEqual(len(parsed[0]['definitions']), 1)
+        self.assertEqual(parsed[1]['word'], 'допомогти́')
+        self.assertEqual(parsed[1]['pos'], 'noun')
+        self.assertEqual(parsed[1]['forms'], None)
+        self.assertEqual(parsed[1]['form_type'], None)
+
     def test_parse_kaikki_entry_multiple_relation_metadata(self):
         import extract
 
@@ -341,6 +419,29 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertEqual(parsed['definitions'][0]['metadata']['targets'], ['година'])
         self.assertIn('alt-of', parsed['definitions'][0]['metadata']['tags'])
         self.assertIn('abbreviation', parsed['definitions'][0]['metadata']['tags'])
+
+    def test_parse_kaikki_entry_extracts_adjective_additional_forms(self):
+        import extract
+
+        entry = {
+            'word': 'зелений',
+            'pos': 'adj',
+            'senses': [{'glosses': ['green']}],
+            'forms': [
+                {'form': 'зелений', 'tags': ['canonical']},
+                {'form': 'зеленіший', 'tags': ['comparative']},
+                {'form': 'найзеленіший', 'tags': ['superlative']},
+            ]
+        }
+
+        parsed = extract._parse_kaikki_entry(entry)
+        self.assertIsInstance(parsed, dict)
+        self.assertEqual(parsed['word'], 'зелений')
+        self.assertEqual(parsed['pos'], 'adjective')
+        self.assertIn('addl comp', parsed['forms'])
+        self.assertIn('addl super', parsed['forms'])
+        self.assertEqual(parsed['forms']['addl comp'], ['зеленіший'])
+        self.assertEqual(parsed['forms']['addl super'], ['найзеленіший'])
 
     def test_clean_alerted_words_resolves_form_of_metadata(self):
         import dictionary
