@@ -9,34 +9,11 @@ import { useQueryState } from 'nuqs';
 import SearchBar from './components/SearchBar';
 import EntryRow from './components/EntryRow';
 import { normalizeText } from './components/utils';
-
-export interface DictionaryEntry {
-  index: number;
-  word: string;
-  pos: string;
-  info?: string;
-  defs?: string[];
-  forms?: unknown;
-  normalizedWord: string;
-  normalizedDefs: string;
-  normalizedForms: string;
-  normalizedFormTokens: string[];
-}
-
-export interface RawDictionaryEntry {
-  word: string;
-  pos: string;
-  info?: string;
-  defs?: string[];
-  forms?: unknown;
-  variants?: string[];
-  freq?: number;
-  index?: number;
-}
-
-export interface VerbAspectMap {
-  [key: string]: number | number[];
-}
+import type {
+  DictionaryEntry,
+  RawDictionaryEntry,
+  VerbAspectMap,
+} from './types/words';
 
 const RESULTS_PER_PAGE = 50;
 

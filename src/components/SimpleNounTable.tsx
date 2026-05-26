@@ -21,8 +21,10 @@ const TOOLTIPS: { [key: string]: string } = {
   voc: 'Vocative/Кличний — direct address',
 };
 
+type FormValue = string | string[];
+
 interface SimpleNounTableProps {
-  forms: any;
+  forms: Record<string, FormValue>;
   query: string;
 }
 

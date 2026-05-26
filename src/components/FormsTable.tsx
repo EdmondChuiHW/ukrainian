@@ -6,20 +6,24 @@ import VerbTable from './VerbTable';
 import type { VerbForms } from './VerbTable';
 import GenericForms from './GenericForms';
 
+type FormValue = string | string[];
+
+type FormsMap = Record<string, FormValue>;
+
 interface FormsTableProps {
   forms: unknown;
   query: string;
 }
 
-const isSimpleNounForms = (forms: any): boolean => {
-  if (!forms) return false;
+const isSimpleNounForms = (forms: unknown): forms is FormsMap => {
+  if (!forms || typeof forms !== 'object') return false;
   const keys = Object.keys(forms);
   if (!keys.length) return false;
   return keys.every((key) => /^(nom|acc|gen|dat|ins|loc|voc) n$/.test(key));
 };
 
-const isNounForms = (forms: any): boolean => {
-  if (!forms) return false;
+const isNounForms = (forms: unknown): forms is FormsMap => {
+  if (!forms || typeof forms !== 'object') return false;
   const keys = Object.keys(forms);
   if (!keys.length) return false;
   return keys.every((key) =>
@@ -27,8 +31,8 @@ const isNounForms = (forms: any): boolean => {
   );
 };
 
-const isAdjectiveForms = (forms: any): boolean => {
-  if (!forms) return false;
+const isAdjectiveForms = (forms: unknown): forms is FormsMap => {
+  if (!forms || typeof forms !== 'object') return false;
   const keys = Object.keys(forms);
   return keys.some((key) =>
     /^(nom|acc|gen|dat|ins|loc) (am|an|af|ap)$/.test(key),

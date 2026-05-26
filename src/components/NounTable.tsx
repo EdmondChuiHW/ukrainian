@@ -23,8 +23,10 @@ const TOOLTIPS: { [key: string]: string } = {
   p: 'Plural/Множина',
 };
 
+type FormValue = string | string[];
+
 interface NounTableProps {
-  forms: any;
+  forms: Record<string, FormValue>;
   query: string;
 }
 

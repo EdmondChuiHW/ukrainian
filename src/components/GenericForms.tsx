@@ -3,20 +3,20 @@ import MatchAndStressText from './MatchAndStressText';
 import { humanizeKey } from './utils';
 
 interface GenericFormsProps {
-  forms: any;
+  forms: Record<string, unknown>;
   query: string;
 }
 
-export const FormValue: React.FC<{ value: any; query: string }> = ({
+export const FormValue: React.FC<{ value: unknown; query: string }> = ({
   value,
   query,
 }) => {
   if (Array.isArray(value)) {
     return (
       <div className="form-values">
-        {value.map((item, idx) => (
+        {(value as unknown[]).map((item, idx) => (
           <p key={idx}>
-            <MatchAndStressText text={item} matchTerm={query} />
+            <MatchAndStressText text={String(item)} matchTerm={query} />
           </p>
         ))}
       </div>
@@ -26,12 +26,14 @@ export const FormValue: React.FC<{ value: any; query: string }> = ({
   if (value && typeof value === 'object') {
     return (
       <div className="form-nested">
-        {Object.entries(value).map(([subKey, subValue]) => (
-          <div key={subKey} className="form-row">
-            <span className="form-label-inline">{humanizeKey(subKey)}</span>
-            <FormValue value={subValue} query={query} />
-          </div>
-        ))}
+        {Object.entries(value as Record<string, unknown>).map(
+          ([subKey, subValue]) => (
+            <div key={subKey} className="form-row">
+              <span className="form-label-inline">{humanizeKey(subKey)}</span>
+              <FormValue value={subValue} query={query} />
+            </div>
+          ),
+        )}
       </div>
     );
   }

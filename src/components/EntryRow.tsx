@@ -2,11 +2,12 @@ import React, { Fragment } from 'react';
 import MatchAndStressText from './MatchAndStressText';
 import CounterpartLinks from './CounterpartLinks';
 import FormsTable from './FormsTable';
+import type { DictionaryEntry, VerbAspectMap } from '../types/words';
 
 interface EntryRowProps {
-  entry: any;
-  verbAspectMap: any;
-  words: any[];
+  entry: DictionaryEntry;
+  verbAspectMap: VerbAspectMap;
+  words: Array<Pick<DictionaryEntry, 'index' | 'word'>>;
   query: string;
   onSelectWord: (word: string) => void;
 }
@@ -26,13 +27,12 @@ export const EntryRow: React.FC<EntryRowProps> = React.memo(
           <div className="title-container">
             <h2 className="title">
               <MatchAndStressText text={entry.word} matchTerm={query} />
-              {entry.variants?.length > 0 &&
-                entry.variants.map((v) => (
-                  <Fragment key={v}>
-                    <span> or </span>
-                    <MatchAndStressText text={v} matchTerm={query} />
-                  </Fragment>
-                ))}
+              {entry.variants?.map((v) => (
+                <Fragment key={v}>
+                  <span> or </span>
+                  <MatchAndStressText text={v} matchTerm={query} />
+                </Fragment>
+              ))}
             </h2>
             <span className="subtitle">
               {entry.pos}

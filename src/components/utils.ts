@@ -15,15 +15,18 @@ export const normalizeText = (text: string = '') => {
     .trim();
 };
 
-export const getCellText = (value: any): string => {
+export const getCellText = (value: unknown): string => {
   if (typeof value === 'string') return value;
-  if (Array.isArray(value)) return value.join(' ');
+  if (Array.isArray(value)) return (value as unknown[]).join(' ');
   if (value && typeof value === 'object') {
-    const extractTextArray = (val: any): string[] => {
+    const extractTextArray = (val: unknown): string[] => {
       if (typeof val === 'string') return [val];
-      if (Array.isArray(val)) return val.flatMap(extractTextArray);
+      if (Array.isArray(val))
+        return (val as unknown[]).flatMap(extractTextArray);
       if (val && typeof val === 'object')
-        return Object.values(val).flatMap(extractTextArray);
+        return Object.values(val as Record<string, unknown>).flatMap(
+          extractTextArray,
+        );
       return [];
     };
     return extractTextArray(value).join(' ');
@@ -31,7 +34,7 @@ export const getCellText = (value: any): string => {
   return '';
 };
 
-export const hasExactCellMatch = (value: any, query: string): boolean => {
+export const hasExactCellMatch = (value: unknown, query: string): boolean => {
   const normalizedQuery = normalizeText(query || '');
   if (!normalizedQuery) return false;
 

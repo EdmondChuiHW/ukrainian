@@ -1,14 +1,15 @@
 import React, { useMemo } from 'react';
 import MatchAndStressText from './MatchAndStressText';
 import { ACCENT_MARK } from './utils';
+import type { DictionaryEntry, VerbAspectMap } from '../types/words';
 
-interface CounterpartLinksProps {
-  entry: any;
-  verbAspectMap: any;
-  words: any[];
+type CounterpartLinksProps = {
+  entry: DictionaryEntry;
+  verbAspectMap: VerbAspectMap;
+  words: Array<Pick<DictionaryEntry, 'index' | 'word'>>;
   onSelectWord: (word: string) => void;
   query: string;
-}
+};
 
 export const CounterpartLinks: React.FC<CounterpartLinksProps> = React.memo(
   ({ entry, verbAspectMap, words, onSelectWord, query }) => {

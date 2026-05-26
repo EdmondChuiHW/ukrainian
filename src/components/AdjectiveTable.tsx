@@ -2,6 +2,7 @@ import React from 'react';
 import FormCell from './FormCell';
 import MatchAndStressText from './MatchAndStressText';
 import { humanizeKey } from './utils';
+import type { AdjectiveForms } from '../types/words';
 
 const CATEGORIES = [
   { key: 'am', label: 'Male' },
@@ -35,7 +36,7 @@ const TOOLTIPS: { [key: string]: string } = {
 };
 
 interface AdjectiveTableProps {
-  forms: any;
+  forms: AdjectiveForms;
   query: string;
 }
 
@@ -91,7 +92,7 @@ export const AdjectiveTable: React.FC<AdjectiveTableProps> = ({
               </th>
               <td colSpan={4}>
                 {Array.isArray(addlValue) ? (
-                  addlValue.map((item: any, idx: number) => (
+                  addlValue.map((item: string, idx: number) => (
                     <React.Fragment key={idx}>
                       <MatchAndStressText text={item} matchTerm={query} />
                       {idx < addlValue.length - 1 && <br />}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useTransition } from 'react';
+import React, { useRef, useTransition } from 'react';
 import { useQueryState } from 'nuqs';
 
 interface SearchBarProps {
@@ -7,17 +7,10 @@ interface SearchBarProps {
 
 export const SearchBar: React.FC<SearchBarProps> = ({ onSearchChange }) => {
   const [q] = useQueryState('q', { defaultValue: '' });
-  const [localVal, setLocalVal] = useState(q);
   const [, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync internal input value with external query state (e.g. from counterpart clicks)
-  useEffect(() => {
-    setLocalVal(q);
-  }, [q]);
-
   const updateSearch = (val: string) => {
-    setLocalVal(val);
     startTransition(() => {
       onSearchChange(val);
     });
@@ -55,7 +48,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearchChange }) => {
             id="search"
             type="search"
             placeholder="Search for Ukrainian words or definitions..."
-            value={localVal}
+            value={q ?? ''}
             onChange={(e) => updateSearch(e.target.value)}
             autoComplete="off"
             autoCorrect="off"
@@ -67,7 +60,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearchChange }) => {
       </div>
 
       <div className="toolbar-actions">
-        {localVal && (
+        {q && (
           <button
             id="clearSearch"
             type="button"
