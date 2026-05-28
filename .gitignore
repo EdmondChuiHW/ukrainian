@@ -6,6 +6,8 @@ etl/output/*
 
 .tmp/*
 
+.venv/*
+
 # Logs
 logs
 *.log

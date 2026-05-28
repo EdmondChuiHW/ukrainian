@@ -13,6 +13,7 @@ export interface RawDictionaryEntry {
   variants?: string[];
   freq?: number;
   index?: number;
+  counterparts?: number[];
 }
 
 export interface DictionaryEntry extends RawDictionaryEntry {
@@ -22,5 +23,3 @@ export interface DictionaryEntry extends RawDictionaryEntry {
   normalizedForms: string;
   normalizedFormTokens: string[];
 }
-
-export type VerbAspectMap = Record<string, number | number[]>;

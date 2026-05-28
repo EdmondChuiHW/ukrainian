@@ -104,10 +104,6 @@ button {
   cursor: pointer;
 }
 
-.counterpart-link {
-  font-weight: 700;
-}
-
 .topbar {
   position: sticky;
   top: 0;

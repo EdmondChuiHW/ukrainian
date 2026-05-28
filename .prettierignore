@@ -1,5 +1,7 @@
 index.json
 word_dict.json
 
+etl/sources/*
+
 public/words.json
-public/verb_aspect_mapping.json
+public/old_words.json

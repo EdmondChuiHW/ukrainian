@@ -1,72 +1,64 @@
-import React, { useMemo } from 'react';
+import { Fragment, type FC } from 'react';
 import MatchAndStressText from './MatchAndStressText';
 import { ACCENT_MARK } from './utils';
-import type { DictionaryEntry, VerbAspectMap } from '../types/words';
+import type { DictionaryEntry } from '../types/words';
 
 type CounterpartLinksProps = {
   entry: DictionaryEntry;
-  verbAspectMap: VerbAspectMap;
   words: Array<Pick<DictionaryEntry, 'index' | 'word'>>;
   onSelectWord: (word: string) => void;
   query: string;
 };
 
-export const CounterpartLinks: React.FC<CounterpartLinksProps> = React.memo(
-  ({ entry, verbAspectMap, words, onSelectWord, query }) => {
-    const isVerb = entry.pos === 'verb';
+export const CounterpartLinks: FC<CounterpartLinksProps> = ({
+  entry,
+  words,
+  onSelectWord,
+  query,
+}) => {
+  const isVerb = entry.pos === 'verb';
 
-    const counterparts = useMemo(() => {
-      const rawAspectIds = verbAspectMap[entry.index.toString()];
-      if (!rawAspectIds) return [];
+  const counterparts = entry.counterparts
+    ?.map((idx) => words[idx])
+    .filter(Boolean);
 
-      const aspectIds = Array.isArray(rawAspectIds)
-        ? rawAspectIds
-        : [rawAspectIds];
-      return aspectIds.map((idx) => words[idx]).filter(Boolean);
-    }, [entry.index, verbAspectMap, words]);
+  if (!isVerb) return null;
+  if (!counterparts?.length) return null;
 
-    if (!isVerb) return null;
-    if (counterparts.length === 0) return null;
+  const renderAspectLabel = () => {
+    if (entry.info === 'imperfective') {
+      return <>Perfective: </>;
+    }
+    if (entry.info === 'perfective') {
+      return <>Imperfective: </>;
+    }
+    return <>Aspect counterpart{counterparts.length > 1 ? 's' : ''}: </>;
+  };
 
-    const renderAspectLabel = () => {
-      if (entry.info === 'impf') {
+  return (
+    <span>
+      {renderAspectLabel()}
+      {counterparts.map((cp, idx) => {
+        const noAccentWord = cp.word.replaceAll(ACCENT_MARK, '');
         return (
-          <>Perfective counterpart{counterparts.length > 1 ? 's' : ''}: </>
+          <Fragment key={cp.index}>
+            <a
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                onSelectWord(noAccentWord);
+              }}
+              className="counterpart-link"
+              href={`/?q=${encodeURIComponent(noAccentWord)}`}
+            >
+              <MatchAndStressText text={cp.word} matchTerm={query} />
+            </a>
+            {idx < counterparts.length - 1 && ', '}
+          </Fragment>
         );
-      }
-      if (entry.info === 'pf') {
-        return (
-          <>Imperfective counterpart{counterparts.length > 1 ? 's' : ''}: </>
-        );
-      }
-      return <>Aspect counterpart{counterparts.length > 1 ? 's' : ''}: </>;
-    };
-
-    return (
-      <p style={{ marginTop: '1rem', marginBottom: 0 }}>
-        {renderAspectLabel()}
-        {counterparts.map((cp, idx) => {
-          const noAccentWord = cp.word.replaceAll(ACCENT_MARK, '');
-          return (
-            <React.Fragment key={cp.index}>
-              <a
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onSelectWord(noAccentWord);
-                }}
-                className="counterpart-link"
-                href={`/?q=${encodeURIComponent(noAccentWord)}`}
-              >
-                <MatchAndStressText text={cp.word} matchTerm={query} />
-              </a>
-              {idx < counterparts.length - 1 && ', '}
-            </React.Fragment>
-          );
-        })}
-      </p>
-    );
-  },
-);
+      })}
+    </span>
+  );
+};
 
 export default CounterpartLinks;

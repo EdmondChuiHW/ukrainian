@@ -81,10 +81,15 @@ class TestUkrainianETL(unittest.TestCase):
         d.dump(dict_json_path, indent=4, final_form=True)
         d.make_index(index_json_path, word_dict_json_path, indent=4)
 
+        words_json_path = os.path.join(TEST_DATA_DIR, 'words.json')
+        with open(words_json_path, 'w', encoding='utf-8') as f:
+            json.dump(d.get_final_forms(), f, ensure_ascii=False)
+
         # Verify output files exist and are valid JSON
         self.assertTrue(os.path.exists(dict_json_path))
         self.assertTrue(os.path.exists(index_json_path))
         self.assertTrue(os.path.exists(word_dict_json_path))
+        self.assertTrue(os.path.exists(words_json_path))
 
         with open(dict_json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -95,6 +100,40 @@ class TestUkrainianETL(unittest.TestCase):
                 self.assertIn("pos", item)
                 self.assertIn("defs", item)
                 self.assertIn("freq", item)
+
+        with open(words_json_path, 'r', encoding='utf-8') as f:
+            word_entries = json.load(f)
+            self.assertGreater(len(word_entries), 0)
+            self.assertTrue(all('word' in item and 'pos' in item for item in word_entries))
+
+    def test_verb_counterparts_are_embedded_into_final_forms(self):
+        from build_verb_aspect_map import build_verb_counterpart_map, annotate_words_with_counterparts
+
+        words = [
+            {'word': 'співати', 'pos': 'verb', 'freq': 1, 'index': 0},
+            {'word': 'заспівати', 'pos': 'verb', 'freq': 2, 'index': 1},
+        ]
+
+        sample_jsonl = Path(TEST_DATA_DIR) / 'sample_verb_pairs.jsonl'
+        sample_jsonl.write_text(
+            json.dumps({
+                'pos': 'verb',
+                'word': 'співати',
+                'forms': [
+                    {
+                        'tags': ['perfective'],
+                        'links': [['заспівати']],
+                    },
+                ],
+            }) + '\n',
+            encoding='utf-8',
+        )
+
+        mapping = build_verb_counterpart_map(words, sample_jsonl)
+        annotate_words_with_counterparts(words, mapping)
+
+        self.assertEqual(words[0]['counterparts'], [1])
+        self.assertEqual(words[1]['counterparts'], [0])
 
     def test_inflection_lookup_missing_entry_preserves_usage(self):
         import extract

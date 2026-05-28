@@ -9,13 +9,9 @@ import { useQueryState } from 'nuqs';
 import SearchBar from './components/SearchBar';
 import EntryRow from './components/EntryRow';
 import { normalizeText } from './components/utils';
-import type {
-  DictionaryEntry,
-  RawDictionaryEntry,
-  VerbAspectMap,
-} from './types/words';
+import type { DictionaryEntry, RawDictionaryEntry } from './types/words';
 
-const RESULTS_PER_PAGE = 50;
+const RESULTS_PER_PAGE = 5;
 
 const exactMatchScore = (entry: DictionaryEntry, query: string): number => {
   if (!query) return 0;
@@ -71,7 +67,6 @@ export const App: React.FC = () => {
   const deferredQ = useDeferredValue(q);
 
   const [words, setWords] = useState<DictionaryEntry[]>([]);
-  const [verbAspectMap, setVerbAspectMap] = useState<VerbAspectMap>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -97,23 +92,18 @@ export const App: React.FC = () => {
       try {
         setLoading(true);
         // fetch relative to host from workspace root
-        const [wordsRes, aspectRes] = await Promise.all([
-          fetch('/words.json'),
-          fetch('/verb_aspect_mapping.json'),
-        ]);
+        const wordsRes = await fetch('/words.json');
 
-        if (!wordsRes.ok || !aspectRes.ok) {
-          throw new Error('Failed to load dictionary data files');
+        if (!wordsRes.ok) {
+          throw new Error('Failed to load dictionary data file');
         }
 
         const rawWords = (await wordsRes.json()) as RawDictionaryEntry[];
-        const aspectMap = (await aspectRes.json()) as VerbAspectMap;
 
         const indexedWords = rawWords.map((entry, idx) =>
           buildIndex(entry, idx),
         );
         setWords(indexedWords);
-        setVerbAspectMap(aspectMap);
         setError(null);
       } catch (err: unknown) {
         console.error(err);
@@ -276,7 +266,6 @@ export const App: React.FC = () => {
               <EntryRow
                 key={entry.index}
                 entry={entry}
-                verbAspectMap={verbAspectMap}
                 words={words}
                 query={deferredQ}
                 onSelectWord={handleSelectWord}

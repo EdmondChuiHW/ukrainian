@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse
+
 import json
 import re
 import unicodedata
@@ -141,18 +141,8 @@ def sort_mapping_by_frequency(mapping: Dict[int, List[int]], frequency_by_index:
 
 def extract_companion_candidates(entry: dict) -> List[str]:
     candidates: List[str] = []
-    for head_template in entry.get("head_templates", []):
-        args = head_template.get("args", {})
-        for key in ("impf", "pf"):
-            if key in args:
-                candidates.extend(extract_candidates(args[key]))
-    if candidates:
-        return candidates
-
     for form in entry.get("forms", []):
         tags = [str(t).lower() for t in form.get("tags", []) if t]
-        if "infinitive" not in tags:
-            continue
         if not any(t in ("perfective", "imperfective") for t in tags):
             continue
         for link in form.get("links", []):
@@ -160,19 +150,33 @@ def extract_companion_candidates(entry: dict) -> List[str]:
                 candidate = normalize_word(link[0])
                 if candidate and candidate not in candidates:
                     candidates.append(candidate)
+    if candidates:
+        return candidates
+
+    for head_template in entry.get("head_templates", []):
+        args = head_template.get("args", {})
+        for key in ("impf", "pf"):
+            if key in args:
+                candidates.extend(extract_candidates(args[key]))
     return candidates
 
 
-def main(words_path: Path, jsonl_path: Path, output_path: Path, limit: Optional[int] = None, known_pairs_path: Optional[Path] = None) -> None:
-    words = json.loads(words_path.read_text(encoding="utf-8"))
+def build_verb_counterpart_map(
+    words_or_dictionary,
+    jsonl_path: Path,
+    limit: Optional[int] = None,
+    known_pairs_path: Optional[Path] = None,
+) -> Dict[int, List[int]]:
+    words = (
+        words_or_dictionary.get_final_forms()
+        if hasattr(words_or_dictionary, 'get_final_forms')
+        else words_or_dictionary
+    )
     exact_lookup, normalized_lookup, verb_indices, frequency_by_index = build_lookup(words)
     mapping: Dict[int, List[int]] = {}
 
-    known_pairs_count = 0
-    known_unmapped_sources: Set[str] = set()
-    known_unmapped_targets: Set[str] = set()
-    if known_pairs_path is not None:
-        known_pairs_count, known_unmapped_sources, known_unmapped_targets = load_known_pairs(
+    if known_pairs_path is not None and known_pairs_path.exists():
+        load_known_pairs(
             known_pairs_path,
             exact_lookup,
             normalized_lookup,
@@ -181,8 +185,6 @@ def main(words_path: Path, jsonl_path: Path, output_path: Path, limit: Optional[
         )
 
     total_lines = 0
-    matched_sources: Set[str] = set()
-    unmapped_sources: Set[str] = set()
     candidate_words: Set[str] = set()
     unmatched_candidates: Set[str] = set()
 
@@ -201,7 +203,6 @@ def main(words_path: Path, jsonl_path: Path, output_path: Path, limit: Optional[
                 continue
             source_indices = resolve_indices(source_word, exact_lookup, normalized_lookup, verb_indices)
             if not source_indices:
-                unmapped_sources.add(str(source_word))
                 continue
             candidates = extract_companion_candidates(data)
             if not candidates:
@@ -218,78 +219,18 @@ def main(words_path: Path, jsonl_path: Path, output_path: Path, limit: Optional[
                     unmatched_candidates.add(candidate)
             if target_indices:
                 add_mapping(mapping, source_indices, target_indices)
-                matched_sources.add(str(source_word))
 
-    mapped_count = len(mapping)
-    total_verbs = sum(1 for entry in words if entry.get("pos") == "verb")
     sort_mapping_by_frequency(mapping, frequency_by_index)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    serialized = {
-        str(idx): values[0] if len(values) == 1 else values
-        for idx, values in sorted(mapping.items())
-    }
-    output_path.write_text(json.dumps(serialized, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    index_to_word = {
-        entry["index"]: entry.get("word", "")
-        for entry in words
-        if entry.get("pos") == "verb" and entry.get("index") is not None
-    }
-    unmapped_indices = [idx for idx in sorted(verb_indices) if idx not in mapping]
-    unmapped_words = [index_to_word[idx] for idx in unmapped_indices if index_to_word.get(idx)]
-
-    print(f"Loaded {len(words)} word entries.")
-    print(f"Found {total_verbs} verb entries in words.json.")
-    print(f"Processed {total_lines} JSONL lines.")
-    print(f"Mapped {mapped_count} entries to counterpart(s).")
-    if known_pairs_path is not None:
-        print(f"Loaded {known_pairs_count} known pair(s) from {known_pairs_path}.")
-        print(f"Unresolved known source words: {len(known_unmapped_sources)}")
-        print(f"Unresolved known target words: {len(known_unmapped_targets)}")
-    print(f"Matched source verbs: {len(matched_sources)}")
-    print(f"Unmapped source verbs (not in words.json): {len(unmapped_sources)}")
-    print(f"Unmapped verb entries in words.json: {len(unmapped_words)}")
-    if unmapped_words:
-        sample = unmapped_words[:20]
-        print("Sample unmapped words.json verbs:", sample)
-    print(f"Unique companion candidates seen: {len(candidate_words)}")
-    print(f"Unresolved companion candidates: {len(unmatched_candidates)}")
+    return mapping
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Build verb aspect counterpart mapping from words.json and a Wiktionary verb JSONL dump."
-    )
-    parser.add_argument(
-        "--words",
-        type=Path,
-        default=Path(__file__).resolve().parent.parent / "words.json",
-        help="Path to words.json",
-    )
-    parser.add_argument(
-        "--jsonl",
-        type=Path,
-        # https://kaikki.org/dictionary/Ukrainian/pos-verb/index.html
-        default=Path(__file__).resolve().parent / "data" / "kaikki.org-dictionary-Ukrainian-by-pos-verb.jsonl",
-        help="Path to the verb JSONL file",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path(__file__).resolve().parent.parent / "verb_aspect_mapping.json",
-        help="Output mapping path",
-    )
-    parser.add_argument(
-        "--known-pairs",
-        type=Path,
-        default=Path(__file__).resolve().parent / "verb_aspect_known_pairs.json",
-        help="Optional path to a JSON file containing known verb aspect pairs as [[source, target], ...]",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Optional limit on number of lines to process for testing",
-    )
-    args = parser.parse_args()
-    main(args.words, args.jsonl, args.output, args.limit, args.known_pairs)
+def annotate_words_with_counterparts(words: Sequence[dict], mapping: Dict[int, List[int]]) -> None:
+    for entry in words:
+        idx = entry.get("index")
+        if idx is None:
+            continue
+        counterparts = mapping.get(idx)
+        if counterparts:
+            entry["counterparts"] = counterparts
+
+

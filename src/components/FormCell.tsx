@@ -10,13 +10,8 @@ interface FormCellProps {
   separator?: string;
 }
 
-export const FormCell: React.FC<FormCellProps> = ({
-  value,
-  tooltip,
-  query,
-  colSpan,
-  separator = colSpan && colSpan > 1 ? ', ' : <br />,
-}) => {
+export const FormCell: React.FC<FormCellProps> = (props) => {
+  const { value, tooltip, colSpan } = props;
   const isEmptyArray = Array.isArray(value) && value.length === 0;
   const isEmptyString = typeof value === 'string' && !value.trim();
 
@@ -28,24 +23,32 @@ export const FormCell: React.FC<FormCellProps> = ({
     );
   }
 
+  return <NonEmptyFormCell {...props} />;
+};
+
+export const NonEmptyFormCell: React.FC<FormCellProps> = ({
+  value,
+  tooltip,
+  query,
+  colSpan,
+  separator: separatorProp,
+}) => {
+  const separator = separatorProp ?? (colSpan && colSpan > 1 ? ', ' : <br />);
   const isExact = hasExactCellMatch(value, query);
   const cellClass = isExact ? 'cell-exact' : undefined;
 
-  const renderCellContent = () => {
-    if (Array.isArray(value)) {
-      return value.map((item, idx) => (
-        <React.Fragment key={`cell-item-${idx}`}>
-          <MatchAndStressText text={item} matchTerm={query} />
-          {idx < value.length - 1 && <>{separator}</>}
-        </React.Fragment>
-      ));
-    }
-    return <MatchAndStressText text={value} matchTerm={query} />;
-  };
-
   return (
     <td className={cellClass} data-tooltip={tooltip} colSpan={colSpan}>
-      {renderCellContent()}
+      {Array.isArray(value) ? (
+        value.map((item, idx) => (
+          <React.Fragment key={`cell-item-${idx}`}>
+            <MatchAndStressText text={item} matchTerm={query} />
+            {idx < value.length - 1 && <>{separator}</>}
+          </React.Fragment>
+        ))
+      ) : (
+        <MatchAndStressText text={value} matchTerm={query} />
+      )}
     </td>
   );
 };

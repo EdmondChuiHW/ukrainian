@@ -4,6 +4,7 @@ import re
 from copy import deepcopy
 from collections import defaultdict
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List, Optional
 
 DATA_DIR = os.environ.get('DATA_DIR', 'cache')
@@ -602,6 +603,7 @@ class Dictionary:
 		self.frequency_csv_path = frequency_csv_path
 		self.deletion_log_path = deletion_log_path
 		self.deletions = []
+		self.verb_aspect_counterparts: Optional[Dict[int, List[int]]] = None
 
 	def _handle_no_accent(self, to_add, no_accent):
 		existing_keys = list(self.accentless_words[no_accent])
@@ -717,6 +719,18 @@ class Dictionary:
 		finally:
 			extract.dump_inflection_cache()
 
+	def add_verb_aspect_counterparts(self, jsonl_path, known_pairs_path=None, limit=None):
+		from build_verb_aspect_map import build_verb_counterpart_map
+
+		jsonl_path = Path(jsonl_path)
+		known_pairs_path = Path(known_pairs_path) if known_pairs_path is not None else None
+		self.verb_aspect_counterparts = build_verb_counterpart_map(
+			self,
+			jsonl_path,
+			limit=limit,
+			known_pairs_path=known_pairs_path,
+		)
+
 	def get_dict(self):
 		dict = {}
 		for k, v in self.dict.items():
@@ -828,6 +842,11 @@ class Dictionary:
 		)
 		for i, r in enumerate(result):
 			r['index'] = i
+		if self.verb_aspect_counterparts:
+			for r in result:
+				counterparts = self.verb_aspect_counterparts.get(r['index'])
+				if counterparts:
+					r['counterparts'] = counterparts
 		return result
 
 	def make_index(self, loc1, loc2, indent=None):

@@ -86,6 +86,11 @@ def main(debug_words: Optional[list[str]] = None, verbose: bool = False) -> None
         deletion_log_path=deletion_log_path,
     )
     d.add_wiktionary_words()
+    d.add_verb_aspect_counterparts(
+        Path(kaikki_path),
+        known_pairs_path=source_dir / 'verb_aspect_known_pairs.json',
+    )
+
     d.dump(output_dir / 'dictionary_data.json', indent=4, final_form=True)
     d.make_index(output_dir / 'index.json', output_dir / 'word_dict.json', indent=4)
     d.dump(output_dir / 'words.json', final_form=True)
