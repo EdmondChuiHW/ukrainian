@@ -575,10 +575,15 @@ class Word:
 		for pos, usage in self.usages.items():
 			result = {'word': self.word, 'pos': pos}
 			if self.variants:
-				result['variants'] = sorted(
+				variants = sorted(
 					set(self.variants),
 					key=lambda x: (x.replace('́', ''), x),
 				)
+				base = self.get_word_no_accent()
+				if base != self.word:
+					variants = [v for v in variants if v != base]
+				if variants:
+					result['variants'] = variants
 			result = {**result, **usage.get_dict(final_forms=True)}
 			results.append(result)
 		return results

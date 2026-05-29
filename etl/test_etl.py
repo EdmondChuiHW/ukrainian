@@ -391,6 +391,17 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertEqual(len(final_forms), 1)
         self.assertEqual(final_forms[0]['variants'], ['зокрема́'])
 
+    def test_drop_accentless_variant_when_accented_primary(self):
+        import dictionary
+
+        word = dictionary.Word('Украї́на')
+        word.add_definition('noun', 'Ukraine')
+        word.add_variants(['Україна'])
+
+        final_forms = word.get_final_form()
+        self.assertEqual(len(final_forms), 1)
+        self.assertNotIn('variants', final_forms[0])
+
     def test_parse_kaikki_entry_alert_definition_flag(self):
         import extract
 
