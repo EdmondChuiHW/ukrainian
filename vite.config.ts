@@ -11,7 +11,7 @@ export default defineConfig({
     babel({
       presets: [
         reactCompilerPreset({
-          panicThreshold: isDevelopment ? 'critical_errors' : 'none',
+          panicThreshold: isDevelopment ? 'all_errors' : 'none',
         }),
       ],
     }),
