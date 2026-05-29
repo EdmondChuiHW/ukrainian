@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useMemo,
-  useDeferredValue,
-  useCallback,
-} from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQueryState } from 'nuqs';
 import SearchBar from './components/SearchBar';
 import EntryRow from './components/EntryRow';
@@ -12,6 +6,19 @@ import { normalizeText } from './components/utils';
 import type { DictionaryEntry, RawDictionaryEntry } from './types/words';
 
 const RESULTS_PER_PAGE = 5;
+
+const fetchWords = async () => {
+  const wordsRes = await fetch('./words.json');
+
+  if (!wordsRes.ok) {
+    throw new Error('Failed to load dictionary data file');
+  }
+
+  const rawWords = (await wordsRes.json()) as RawDictionaryEntry[];
+  return rawWords.map((entry, idx) => buildIndex(entry, idx));
+};
+
+const fetchPromise = fetchWords();
 
 const exactMatchScore = (entry: DictionaryEntry, query: string): number => {
   if (!query) return 0;
@@ -63,140 +70,95 @@ const buildIndex = (
 };
 
 export const App: React.FC = () => {
-  const [q, setQ] = useQueryState('q', { defaultValue: '' });
-  const deferredQ = useDeferredValue(q);
+  const [q, setQuery] = useQueryState('q', {
+    defaultValue: '',
+    scroll: true,
+    history: 'push',
+  });
+  // keep the normalized query out of search bar so the UI doesn't jump around
+  const normalizedQuery = normalizeText(q);
 
   const [words, setWords] = useState<DictionaryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Sync dark theme directly to documentElement (html)
-  useEffect(() => {
-    const syncTheme = () => {
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      document.documentElement.classList.remove('theme-light', 'theme-dark');
-      document.documentElement.classList.add(
-        isDark ? 'theme-dark' : 'theme-light',
-      );
-    };
-    syncTheme();
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    media.addEventListener('change', syncTheme);
-    return () => media.removeEventListener('change', syncTheme);
-  }, []);
-
   // Fetch data on mount
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        // fetch relative to host from workspace root
-        const wordsRes = await fetch('/words.json');
 
-        if (!wordsRes.ok) {
-          throw new Error('Failed to load dictionary data file');
-        }
+        const indexedWords = await fetchPromise;
 
-        const rawWords = (await wordsRes.json()) as RawDictionaryEntry[];
-
-        const indexedWords = rawWords.map((entry, idx) =>
-          buildIndex(entry, idx),
-        );
+        setLoading(false);
         setWords(indexedWords);
         setError(null);
       } catch (err: unknown) {
+        setLoading(false);
         console.error(err);
         const errorMessage = err instanceof Error ? err.message : String(err);
         setError(errorMessage);
-      } finally {
-        setLoading(false);
       }
     };
 
     loadData();
   }, []);
 
-  // Reset page when search query changes by updating page from the interaction handlers.
   useEffect(() => {
     const onMessage = (ev: MessageEvent<{ q: string }>): void => {
       if (!ev.data?.q) return;
       if (ev.source !== window.opener) return;
 
-      setQ(ev.data.q);
+      setQuery(normalizeText(ev.data.q));
     };
     window.addEventListener('message', onMessage);
 
     return () => window.removeEventListener('message', onMessage);
-  }, [setQ]);
+  }, [setQuery]);
 
-  // Handle word selection (Counterparts, Wiktionary, etc.)
-  const handleSelectWord = useCallback(
-    (word: string) => {
-      setQ(word || null, { shallow: true });
-    },
-    [setQ],
-  );
+  const sortedWords = !normalizedQuery
+    ? words
+    : words
+        .filter(
+          (entry) =>
+            entry.normalizedWord.includes(normalizedQuery) ||
+            entry.normalizedDefs.includes(normalizedQuery) ||
+            entry.normalizedForms.includes(normalizedQuery),
+        )
+        // sort in place is fine
+        .sort((a, b) => {
+          const scoreA = exactMatchScore(a, normalizedQuery);
+          const scoreB = exactMatchScore(b, normalizedQuery);
+          if (scoreB !== scoreA) return scoreB - scoreA;
+          return a.index - b.index;
+        });
 
-  // Compute matched items
-  const filteredWords = useMemo(() => {
-    const query = normalizeText(deferredQ);
-    if (!query) return words;
+  const fallbackResult =
+    sortedWords.length > 0 || !normalizedQuery
+      ? null
+      : (() => {
+          let candidate = normalizedQuery;
+          while (candidate) {
+            candidate = candidate.slice(0, -1).trim();
+            if (!candidate) break;
 
-    return words.filter((entry) => {
-      return (
-        entry.normalizedWord.includes(query) ||
-        entry.normalizedDefs.includes(query) ||
-        entry.normalizedForms.includes(query)
-      );
-    });
-  }, [words, deferredQ]);
+            const matches = words.filter(
+              (entry) =>
+                entry.normalizedWord.includes(candidate) ||
+                entry.normalizedDefs.includes(candidate) ||
+                entry.normalizedForms.includes(candidate),
+            );
+            if (matches.length > 0) {
+              return { query: candidate, count: matches.length };
+            }
+          }
+          return null;
+        })();
 
-  // Sort matched items
-  const sortedWords = useMemo(() => {
-    const query = normalizeText(deferredQ);
-    if (!query) {
-      return filteredWords; // already implicitly sorted by frequency index
-    }
-    return [...filteredWords].sort((a, b) => {
-      const scoreA = exactMatchScore(a, query);
-      const scoreB = exactMatchScore(b, query);
-      if (scoreB !== scoreA) return scoreB - scoreA;
-      return a.index - b.index;
-    });
-  }, [filteredWords, deferredQ]);
+  const handleLoadMore = () => setCurrentPage((prev) => prev + 1);
 
-  // Compute suffix fallbacks
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
-  const fallbackResult = useMemo(() => {
-    const query = normalizeText(deferredQ);
-    if (filteredWords.length > 0 || !query) return null;
-
-    let candidate = query;
-    while (candidate) {
-      candidate = candidate.slice(0, -1).trim();
-      if (!candidate) break;
-
-      const matches = words.filter(
-        (entry) =>
-          entry.normalizedWord.includes(candidate) ||
-          entry.normalizedDefs.includes(candidate) ||
-          entry.normalizedForms.includes(candidate),
-      );
-      if (matches.length > 0) {
-        return { query: candidate, count: matches.length };
-      }
-    }
-    return null;
-  }, [words, filteredWords, deferredQ]);
-
-  // Load more handler
-  const handleLoadMore = useCallback(() => {
-    setCurrentPage((prev) => prev + 1);
-  }, []);
-
-  // Render status bar message
-  const summaryMessage = useMemo(() => {
+  const summaryMessage = (() => {
     if (loading) return 'Loading dictionary...';
     if (error) return 'Failed to load data.';
     if (sortedWords.length === 0) return 'No entries match your search.';
@@ -205,14 +167,13 @@ export const App: React.FC = () => {
     const total = sortedWords.length;
     const plural = total === 1 ? 'entry' : 'entries';
     return `Showing ${shown} of ${total} ${plural}.`;
-  }, [loading, error, sortedWords, currentPage]);
+  })();
 
-  const displayedEntries = useMemo(() => {
-    return sortedWords.slice(0, currentPage * RESULTS_PER_PAGE);
-  }, [sortedWords, currentPage]);
+  const displayedEntries = sortedWords.slice(0, currentPage * RESULTS_PER_PAGE);
 
   return (
     <>
+      <title>{`${normalizedQuery ? `${normalizedQuery} | ` : ''}Ukrainian Dictionary`}</title>
       <header className="topbar">
         <p className="brand__title">
           <span className="brand__title-line brand__title-line--blue">
@@ -223,9 +184,7 @@ export const App: React.FC = () => {
           </span>
         </p>
 
-        <SearchBar
-          onSearchChange={(val) => setQ(val || null, { shallow: true })}
-        />
+        <SearchBar />
       </header>
 
       <main className="main-content">
@@ -267,8 +226,8 @@ export const App: React.FC = () => {
                 key={entry.index}
                 entry={entry}
                 words={words}
-                query={deferredQ}
-                onSelectWord={handleSelectWord}
+                query={normalizedQuery}
+                onSelectWord={setQuery}
               />
             ))}
 
@@ -280,7 +239,7 @@ export const App: React.FC = () => {
               {fallbackResult && (
                 <button
                   type="button"
-                  onClick={() => handleSelectWord(fallbackResult.query)}
+                  onClick={() => setQuery(fallbackResult.query)}
                   className="button button--secondary"
                   style={{ marginTop: '0.75rem', width: 'fit-content' }}
                 >
@@ -288,10 +247,10 @@ export const App: React.FC = () => {
                   {fallbackResult.count} results)
                 </button>
               )}
-              {q && (
+              {normalizedQuery && (
                 <p style={{ marginTop: '0.75rem', marginBottom: 0 }}>
                   <a
-                    href={`https://en.wiktionary.org/wiki/${encodeURIComponent(q.replaceAll('\u0301', '').trim())}#Ukrainian`}
+                    href={`https://en.wiktionary.org/wiki/${encodeURIComponent(normalizedQuery)}#Ukrainian`}
                     className="wiktionary-link"
                     target="_blank"
                     rel="noopener noreferrer"

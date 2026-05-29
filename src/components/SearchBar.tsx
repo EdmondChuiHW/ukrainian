@@ -1,33 +1,22 @@
-import React, { useRef, useTransition } from 'react';
-import { useQueryState } from 'nuqs';
+import React, { useRef } from 'react';
+import { debounce, useQueryState } from 'nuqs';
 
-interface SearchBarProps {
-  onSearchChange: (value: string) => void;
-}
-
-export const SearchBar: React.FC<SearchBarProps> = ({ onSearchChange }) => {
-  const [q] = useQueryState('q', { defaultValue: '' });
-  const [, startTransition] = useTransition();
+export const SearchBar: React.FC = () => {
+  const [q, setQuery] = useQueryState('q', { defaultValue: '' });
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const updateSearch = (val: string) => {
-    startTransition(() => {
-      onSearchChange(val);
-    });
-  };
-
   const handleClear = () => {
-    updateSearch('');
+    setQuery('');
     inputRef.current?.focus();
   };
 
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      if (text) {
-        updateSearch(text);
-        inputRef.current?.focus();
-      }
+      if (!text) return;
+
+      setQuery(text);
+      inputRef.current?.focus();
     } catch (err) {
       console.error('Failed to read clipboard contents:', err);
     }
@@ -47,9 +36,11 @@ export const SearchBar: React.FC<SearchBarProps> = ({ onSearchChange }) => {
             ref={inputRef}
             id="search"
             type="search"
-            placeholder="Search for Ukrainian words or definitions..."
-            value={q ?? ''}
-            onChange={(e) => updateSearch(e.target.value)}
+            placeholder="Search for Ukrainian words or definitions…"
+            value={q}
+            onChange={(e) =>
+              setQuery(e.target.value, { limitUrlUpdates: debounce(500) })
+            }
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
