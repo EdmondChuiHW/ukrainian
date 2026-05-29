@@ -11,15 +11,16 @@ export const SearchBar: React.FC = () => {
   };
 
   const handlePaste = async () => {
+    let text = null;
     try {
-      const text = await navigator.clipboard.readText();
-      if (!text) return;
-
-      setQuery(text);
-      inputRef.current?.focus();
+      text = await navigator.clipboard.readText();
     } catch (err) {
       console.error('Failed to read clipboard contents:', err);
     }
+    if (!text) return;
+
+    setQuery(text);
+    inputRef.current?.focus();
   };
 
   return (
