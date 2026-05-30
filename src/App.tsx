@@ -110,7 +110,7 @@ export const App: React.FC = () => {
       if (!ev.data?.q) return;
       if (ev.source !== window.opener) return;
 
-      setQuery(normalizeText(ev.data.q));
+      setQuery(ev.data.q);
     };
     window.addEventListener('message', onMessage);
 
@@ -226,7 +226,8 @@ export const App: React.FC = () => {
                 key={entry.index}
                 entry={entry}
                 words={words}
-                query={normalizedQuery}
+                // highlight the original search term, not the normalized one
+                query={q}
                 onSelectWord={setQuery}
               />
             ))}
