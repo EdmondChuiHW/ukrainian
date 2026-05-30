@@ -103,7 +103,10 @@ class Usage:
 		self.alerted_definitions = {}
 		self.frequency = None
 		self.forms = {}
-		self.info = {}
+		# Structured grammatical tags instead of raw strings
+		self.gender = None  # 'male', 'female', 'neuter', or None
+		self.animacy = None  # 'animate', 'inanimate', or None
+		self.aspect = None  # 'imperfective', 'perfective', or None
 		self.delete_me = False
 
 	def add_definitions(self, definitions):
@@ -210,42 +213,44 @@ class Usage:
 		self.frequency = frequency
 
 	def add_info(self, info):
-		if info:
-			self.info[info] = None
+		"""Add grammar info from structured source tags."""
+		if not info:
+			return
+
+		gender = info.get('gender')
+		if self.gender is None and gender in ('male', 'female', 'neuter'):
+			self.gender = gender
+
+		animacy = info.get('animacy')
+		if self.animacy is None and animacy in ('animate', 'inanimate'):
+			self.animacy = animacy
+
+		aspect = info.get('aspect')
+		if self.aspect is None and aspect in ('imperfective', 'perfective'):
+			self.aspect = aspect
+
+	def get_grammar_info(self):
+		return {
+			'gender': self.gender,
+			'animacy': self.animacy,
+			'aspect': self.aspect,
+		}
+
+	def _word_info_matches_pos(self, word_info, form_type):
+		"""Check if inflection form_type is applicable to this usage's POS."""
+		return self.pos == form_type
+
 
 	def get_info(self):
-		gender, aspect, animacy = set(), set(), set()
-		for info in self.info:
-			for word in info.lower().split():
-				if word in ('f', 'female', 'feminine'):
-					gender.add('female')
-				if word in ('m', 'male', 'masculine'):
-					gender.add('male')
-				if word in ('animal', 'animate', 'anim'):
-					animacy.add('animate')
-				if word in ('n', 'neuter'):
-					gender.add('neuter')
-				if word in ('inan', 'inanimate'):
-					animacy.add('inanimate')
-				if word in ('imperfective', 'impf'):
-					aspect.add('imperfective')
-				if word in ('pf', 'perfective'):
-					aspect.add('perfective')
-		new_info = []
-		if len(gender) > 0:
-			gender = ' or '.join(gender)
-			new_info.append(gender)
-		if len(aspect) > 0:
-			aspect = ' or '.join(aspect)
-			new_info.append(aspect)
-		if len(animacy) > 0:
-			animacy = ' or '.join(animacy)
-			new_info.append(animacy)
-		if len(new_info) > 0:
-			new_info = ", ".join(new_info)
-		else:
-			new_info = ""
-		return new_info
+		"""Formatted grammar info string for display."""
+		parts = []
+		if self.gender:
+			parts.append(self.gender)
+		if self.animacy:
+			parts.append(self.animacy)
+		if self.aspect:
+			parts.append(self.aspect)
+		return ', '.join(parts) if parts else ''
 
 	def add_forms(self, forms, form_type):
 		if form_type in self.forms:
@@ -273,12 +278,12 @@ class Usage:
 		for found_word, word_info, forms, form_type in results:
 			if found_word:
 				if self.word == found_word: # perfect match!
-					if self.pos == form_type or self.pos in word_info:
+					if self._word_info_matches_pos(word_info, form_type):
 						self.add_info(word_info)
 						self.add_forms(forms, form_type)
 						added_flag = True
 						self.delete_me = False
-				elif self.pos and self.pos in word_info:
+				elif self._word_info_matches_pos(word_info, form_type):
 					this_inflection = get_inflection_positions(self.word) 
 					found_inflection = get_inflection_positions(found_word)
 					if len([x for x in this_inflection if x not in found_inflection]) == 0:  # stress could be elsewhere
@@ -396,14 +401,24 @@ class Usage:
 					self.forms[ft].add_forms(forms.forms)
 				else:
 					self.forms[ft] = forms
-			if len(self.info) == 0 and len(other.info) > 0:
-				self.info = other.info
+			# Merge grammatical tags: prefer self's tags, fall back to other's
+			if self.gender is None and other.gender is not None:
+				self.gender = other.gender
+			if not self.animacy and other.animacy:
+				self.animacy = other.animacy
+			if not self.aspect and other.aspect:
+				self.aspect = other.aspect
 
 	def get_dict(self, final_forms=False):
 		return {
 			'defs': self.get_definitions(),
 			'freq': self.frequency,
 			'info': self.get_info(),
+			'grammar': {
+				'gender': self.gender,
+				'animacy': self.animacy,
+				'aspect': self.aspect,
+			},
 			'forms': self.get_forms(final_forms)
 		}
 

@@ -245,7 +245,7 @@ class TestUkrainianETL(unittest.TestCase):
         import dictionary
 
         usage = dictionary.Usage('час', 'noun')
-        usage.add_info('masculine inanimate')
+        usage.add_info({'gender': 'male', 'animacy': 'inanimate', 'aspect': None})
 
         self.assertEqual(usage.get_info(), 'male, inanimate')
 
@@ -264,7 +264,9 @@ class TestUkrainianETL(unittest.TestCase):
         }
 
         parsed = extract._parse_kaikki_entry(entry)
-        self.assertEqual(set(parsed['info'].split()), {'masculine', 'inanimate'})
+        self.assertEqual(parsed['info']['gender'], 'male')
+        self.assertEqual(parsed['info']['animacy'], 'inanimate')
+        self.assertEqual(parsed['info']['aspect'], None)
 
     def test_form_of_word_is_removed_after_merge(self):
         import extract, dictionary

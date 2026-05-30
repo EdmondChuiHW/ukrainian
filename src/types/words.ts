@@ -4,10 +4,17 @@ export type AdjectiveForms = DictionaryForms & {
   addl?: Record<string, FormValue>;
 };
 
+export interface GrammarInfo {
+  gender: string | null;
+  animacy: string | null;
+  aspect: string | null;
+}
+
 export interface RawDictionaryEntry {
   word: string;
   pos: string;
   info?: string;
+  grammar?: GrammarInfo;
   defs?: string[];
   forms?: DictionaryForms;
   variants?: string[];

@@ -16,6 +16,17 @@ const buildWiktionaryUrl = (word: string = '') => {
   return `https://en.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}#Ukrainian`;
 };
 
+const formatGrammar = (entry: DictionaryEntry): string | null => {
+  if (entry.grammar) {
+    const parts: string[] = [];
+    if (entry.grammar.gender) parts.push(entry.grammar.gender);
+    if (entry.grammar.animacy) parts.push(entry.grammar.animacy);
+    if (entry.grammar.aspect) parts.push(entry.grammar.aspect);
+    return parts.length > 0 ? parts.join('; ') : null;
+  }
+  return entry.info || null;
+};
+
 export const EntryRow: React.FC<EntryRowProps> = ({
   entry,
   words,
@@ -23,6 +34,7 @@ export const EntryRow: React.FC<EntryRowProps> = ({
   onSelectWord,
 }) => {
   const wiktionaryUrl = buildWiktionaryUrl(entry.word);
+  const grammarDisplay = formatGrammar(entry);
 
   return (
     <article className="row">
@@ -40,7 +52,7 @@ export const EntryRow: React.FC<EntryRowProps> = ({
           </h2>
           <span className="subtitle">
             {entry.pos}
-            {entry.info && ` (${entry.info})`}
+            {grammarDisplay && ` (${grammarDisplay})`}
           </span>
 
           <CounterpartLinks

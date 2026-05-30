@@ -19,8 +19,41 @@ except ImportError:
 
 JSON_PARSER = _fast_json.__name__
 
+_GENDER_MAP = {
+	'feminine': 'female',
+	'masculine': 'male',
+	'neuter': 'neuter',
+}
+
+_ANIMACY_TAGS = {
+	'animate': 'animate',
+	'inanimate': 'inanimate',
+}
+
+_ASPECT_TAGS = {
+	'imperfective': 'imperfective',
+	'perfective': 'perfective',
+}
+
 def _json_loads(line):
     return _fast_json.loads(line)
+
+
+def _build_grammar_info(tags):
+	"""Build structured grammar info from deterministic source tags."""
+	info = {
+		'gender': None,
+		'animacy': None,
+		'aspect': None,
+	}
+	for tag in tags or []:
+		if tag in _GENDER_MAP and info['gender'] is None:
+			info['gender'] = _GENDER_MAP[tag]
+		if tag in _ANIMACY_TAGS and info['animacy'] is None:
+			info['animacy'] = _ANIMACY_TAGS[tag]
+		if tag in _ASPECT_TAGS and info['aspect'] is None:
+			info['aspect'] = _ASPECT_TAGS[tag]
+	return info
 
 # Resolve paths relative to this module, not CWD
 _ETL_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -130,7 +163,7 @@ def get_inflection(word, kaikki_path, use_cache=True):
 				form_type = None
 				for ft in usage.forms:
 					form_type = ft
-				results.append([w.word, usage.get_info(), forms, form_type])
+				results.append([w.word, usage.get_grammar_info(), forms, form_type])
 	
 	if not results:
 		return [[None, None, None, None]]
@@ -192,11 +225,13 @@ def get_inflection(word, kaikki_path, use_cache=True):
 			found_word = ' '.join(found_word.split()[:word_len])
 			forms = deepcopy(forms) if forms is not None else {}
 			
-			if word_info:
+			if isinstance(word_info, dict):
+				word_info = deepcopy(word_info)
+			elif word_info:
 				word_info = ''.join([x for x in word_info if x in cyrillic + "' "])
 				word_info = ' '.join([Word.normalize_pos(translations.get(x, x)) for x in word_info.split() if x in translations])
 			else:
-				word_info = ''
+				word_info = {}
 			
 			for form_id in list(forms.keys()):
 				form = forms[form_id]
@@ -440,7 +475,7 @@ def _parse_kaikki_entry(entry):
 		add_word_info_tags(entry_metadata.get('tags'))
 	for sense in entry.get('senses', []):
 		add_word_info_tags(sense.get('tags'))
-	word_info = ' '.join(word_info_tags) if word_info_tags else ''
+	word_info = _build_grammar_info(word_info_tags)
 	
 	form_type = None
 	if pos == 'noun':

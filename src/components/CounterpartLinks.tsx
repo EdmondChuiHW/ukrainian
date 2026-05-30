@@ -26,10 +26,11 @@ export const CounterpartLinks: FC<CounterpartLinksProps> = ({
   if (!counterparts?.length) return null;
 
   const renderAspectLabel = () => {
-    if (entry.info === 'imperfective') {
+    const aspect = entry.grammar?.aspect;
+    if (aspect === 'imperfective') {
       return <>Perfective: </>;
     }
-    if (entry.info === 'perfective') {
+    if (aspect === 'perfective') {
       return <>Imperfective: </>;
     }
     return <>Aspect counterpart{counterparts.length > 1 ? 's' : ''}: </>;
