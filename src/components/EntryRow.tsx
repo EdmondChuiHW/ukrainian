@@ -22,7 +22,7 @@ const formatGrammar = (entry: DictionaryEntry): string | null => {
     if (entry.grammar.gender) parts.push(entry.grammar.gender);
     if (entry.grammar.animacy) parts.push(entry.grammar.animacy);
     if (entry.grammar.aspect) parts.push(entry.grammar.aspect);
-    return parts.length > 0 ? parts.join('; ') : null;
+    return parts.length > 0 ? parts.join(', ') : null;
   }
   return entry.info || null;
 };
