@@ -85,7 +85,8 @@ class Forms:
 					new_forms[info[0]][info[1]] = self.forms[form]
 				elif len(info) == 3:
 					new_forms[info[0]]['pp'][info[1]] = self.forms[form]
-			new_forms['inf'] = self.forms['inf']
+			if 'inf' in self.forms:
+				new_forms['inf'] = self.forms['inf']
 			for form in new_forms:
 				if isinstance(new_forms[form], defaultdict):
 					new_forms[form] = dict(new_forms[form])
@@ -101,6 +102,7 @@ class Usage:
 		self.pos = pos
 		self.definitions = {}
 		self.alerted_definitions = {}
+		self.def_prefixes = {}  # Store prefixes mapped by definition string
 		self.frequency = None
 		self.forms = {}
 		# Structured grammatical tags instead of raw strings
@@ -113,7 +115,7 @@ class Usage:
 		for d in definitions:
 			self.add_definition(d)
 
-	def add_definition(self, definition, replaced=None, alert=False):
+	def add_definition(self, definition, replaced=None, alert=False, prefix=None):
 		metadata = None
 		if isinstance(alert, dict):
 			metadata = alert
@@ -121,6 +123,8 @@ class Usage:
 		if alert:
 			self.alerted_definitions[definition] = metadata or {}
 		self.definitions[definition] = replaced
+		if prefix is not None:
+			self.def_prefixes[definition] = prefix
 		# check to ensure definitions are not redundant
 		bad_defs = set()
 		for d1 in self.definitions.keys():
@@ -139,6 +143,7 @@ class Usage:
 		for d in bad_defs:
 			self.definitions.pop(d, None)
 			self.alerted_definitions.pop(d, None)
+			self.def_prefixes.pop(d, None)
 
 	def _forms_contain_word(self, forms, word):
 		if isinstance(forms, dict):
@@ -184,6 +189,7 @@ class Usage:
 						if 'form_of' in relations:
 							self.definitions.pop(d, None)
 							self.alerted_definitions.pop(d, None)
+							self.def_prefixes.pop(d, None)
 					continue
 				if relations - {'form_of'}:
 					continue
@@ -208,9 +214,7 @@ class Usage:
 			if nothing_found:
 				self.definitions.pop(d, None)
 				self.alerted_definitions.pop(d, None)
-
-	def add_frequency(self, frequency):
-		self.frequency = frequency
+			self.def_prefixes.pop(d, None)
 
 	def add_info(self, info):
 		"""Add grammar info from structured source tags."""
@@ -259,6 +263,9 @@ class Usage:
 			forms = Forms(forms, form_type)
 			self.forms[form_type] = forms
 
+	def add_frequency(self, frequency):
+		self.frequency = frequency
+
 	def add_inflection(self, results, force=False):
 
 		def get_inflection_positions(word):
@@ -290,6 +297,7 @@ class Usage:
 						new_usage = Usage(found_word, self.pos)
 						new_usage.definitions = deepcopy(self.definitions)
 						new_usage.alerted_definitions = deepcopy(self.alerted_definitions)
+						new_usage.def_prefixes = deepcopy(self.def_prefixes)
 						new_usage.add_info(word_info)
 						new_usage.add_forms(forms, form_type)
 						new_usages.append(new_usage)
@@ -300,6 +308,7 @@ class Usage:
 						new_usage = Usage(self.word, form_type)
 						new_usage.definitions = deepcopy(self.definitions)
 						new_usage.alerted_definitions = deepcopy(self.alerted_definitions)
+						new_usage.def_prefixes = deepcopy(self.def_prefixes)
 						new_usage.add_info(word_info)
 						new_usage.add_forms(forms, form_type)
 						new_usages.append(new_usage)
@@ -385,16 +394,21 @@ class Usage:
 		for pair in zip(self.get_definitions(), other.get_definitions(accept_alerts)):
 			self_alert = self.alerted_definitions.get(pair[0], False)
 			other_alert = other.alerted_definitions.get(pair[1], False)
-			new_usage.add_definition(pair[0], alert=self_alert)
-			new_usage.add_definition(pair[1], alert=other_alert)
+			self_prefix = self.def_prefixes.get(pair[0])
+			other_prefix = other.def_prefixes.get(pair[1])
+			new_usage.add_definition(pair[0], alert=self_alert, prefix=self_prefix)
+			new_usage.add_definition(pair[1], alert=other_alert, prefix=other_prefix)
 		if len(these_definitions) > len(other_definitions):
 			for d in these_definitions[-1 * (len(these_definitions) - min_length):]:
-				new_usage.add_definition(d, alert=self.alerted_definitions.get(d, False))
+				prefix = self.def_prefixes.get(d)
+				new_usage.add_definition(d, alert=self.alerted_definitions.get(d, False), prefix=prefix)
 		elif len(other_definitions) > len(these_definitions):
 			for d in other_definitions[-1 * (len(other_definitions) - min_length):]:
-				new_usage.add_definition(d, alert=other.alerted_definitions.get(d, False))
+				prefix = other.def_prefixes.get(d)
+				new_usage.add_definition(d, alert=other.alerted_definitions.get(d, False), prefix=prefix)
 		self.definitions = new_usage.definitions
 		self.alerted_definitions = new_usage.alerted_definitions
+		self.def_prefixes = new_usage.def_prefixes
 		if use_other_forms:
 			for ft, forms in other.forms.items():
 				if ft in self.forms:
@@ -408,10 +422,16 @@ class Usage:
 				self.animacy = other.animacy
 			if not self.aspect and other.aspect:
 				self.aspect = other.aspect
+		# Merge prefixes
+		for def_str, prefix in other.def_prefixes.items():
+			if def_str not in self.def_prefixes:
+				self.def_prefixes[def_str] = prefix
 
 	def get_dict(self, final_forms=False):
-		return {
-			'defs': self.get_definitions(),
+		defs = self.get_definitions()
+		prefixes = [self.def_prefixes.get(d) for d in defs]
+		result = {
+			'defs': defs,
 			'freq': self.frequency,
 			'info': self.get_info(),
 			'grammar': {
@@ -421,6 +441,10 @@ class Usage:
 			},
 			'forms': self.get_forms(final_forms)
 		}
+		# Only include def_prefixes if there are any non-None values
+		if any(p is not None for p in prefixes):
+			result['def_prefixes'] = prefixes
+		return result
 
 
 class Word:
@@ -436,18 +460,13 @@ class Word:
 
 	def normalize_pos(pos):
 		replace = {
-			'conjunction': 'particle',
-			'determiner': 'particle',
-			'interjection': 'particle',
 			'letter': 'noun',
 			'number': 'numeral',
 			'numeral': 'numeral',
-			'postposition': 'particle',
-			'predicative': 'particle',
-			'preposition': 'particle',
 			'prepositional phrase': 'phrase',
 			'name': 'noun',
 			'proper noun': 'noun',
+			'det': 'particle',
 		}
 		if pos in replace:
 			return replace[pos]
@@ -458,7 +477,7 @@ class Word:
 	def get_word_no_accent(self):
 		return self.word_no_accent
 
-	def add_definition(self, pos, definition, alert=False):
+	def add_definition(self, pos, definition, alert=False, prefix=None):
 		if pos is None:
 			pos = 'particle'
 		if pos == 'verb' and len(definition.split()) == 1:
@@ -503,7 +522,7 @@ class Word:
 		else:
 			u = Usage(self.word, pos)
 			self.usages[pos] = u
-		u.add_definition(definition, replaced=replaced, alert=alert)
+		u.add_definition(definition, replaced=replaced, alert=alert, prefix=prefix)
 
 	def add_variants(self, variants):
 		if not variants:

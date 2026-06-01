@@ -28,11 +28,36 @@ _GENDER_MAP = {
 _ANIMACY_TAGS = {
 	'animate': 'animate',
 	'inanimate': 'inanimate',
+	'person': 'animate',
+	'animal': 'animate',
 }
 
 _ASPECT_TAGS = {
 	'imperfective': 'imperfective',
 	'perfective': 'perfective',
+}
+
+# Structured grammar tags that should be excluded from prefix
+# (they're already captured in the grammar field)
+_STRUCTURED_TAGS = {
+	# Gender
+	'feminine', 'masculine', 'neuter',
+	# Animacy
+	'animate', 'inanimate', 'person', 'animal',
+	# Aspect
+	'imperfective', 'perfective',
+	# Number
+	'singular', 'plural',
+	# Case
+	#'nominative', 'genitive', 'dative', 'accusative', 'instrumental', 'locative', 'vocative',
+	# Tense
+	'present', 'past', 'future', 'imperative', 'infinitive',
+	# Voice/Mood
+	#'active', 'passive', 'reflexive', 'conditional',
+	# Person
+	#'first-person', 'second-person', 'third-person',
+	# Other structural
+	#'inclusive', 'exclusive', 'formal', 'informal',
 }
 
 def _json_loads(line):
@@ -377,7 +402,8 @@ def _parse_kaikki_entry(entry):
 		'num': 'numeral',
 		'intj': 'particle',
 		'name': 'noun',
-		'proper noun': 'noun'
+		'proper noun': 'noun',
+		'det': 'particle'
 	}
 	raw_pos = entry.get('pos', 'particle')
 	pos = pos_map.get(raw_pos, raw_pos)
@@ -453,11 +479,30 @@ def _parse_kaikki_entry(entry):
 
 	for sense in entry.get('senses', []):
 		glosses = sense.get('glosses', [])
+		tags = sense.get('tags') or []
+		qualifier = sense.get('qualifier')
+
+		prefix_parts = []
+		if qualifier:
+			q_str = qualifier.strip()
+			if 'case' in q_str.lower() and not q_str.startswith('+'):
+				q_str = f"+{q_str}"
+			prefix_parts.append(q_str)
+		for tag in tags:
+			if tag not in ('form-of', 'alt-of', 'canonical', 'table-tags', 'inflection-template') and tag not in _STRUCTURED_TAGS:
+				prefix_parts.append(tag)
+		prefix = prefix_parts if prefix_parts else None
+
 		sense_metadata = _parse_relation_metadata(sense)
 		combined_metadata = _merge_relation_metadata(entry_metadata, sense_metadata)
 		for g in glosses:
 			alert = bool(combined_metadata)
-			definitions.append({'definition': g, 'alert': alert, 'metadata': combined_metadata})
+			definitions.append({
+				'definition': g,
+				'prefix': prefix,
+				'alert': alert,
+				'metadata': combined_metadata
+			})
 	
 	word_info_tags = []
 	def add_word_info_tags(tags):
@@ -477,15 +522,30 @@ def _parse_kaikki_entry(entry):
 		add_word_info_tags(sense.get('tags'))
 	word_info = _build_grammar_info(word_info_tags)
 	
+	# Determine form_type based on inflection_templates
+	inflection_templates = entry.get('inflection_templates') or []
+	template_names = [t.get('name', '').lower() for t in inflection_templates if isinstance(t, dict)]
+	
 	form_type = None
-	if pos == 'noun':
-		form_type = 'noun'
-	elif pos == 'verb':
+	if any('conj' in name for name in template_names):
 		form_type = 'verb'
-	elif pos == 'adjective':
+	elif any('adecl' in name for name in template_names):
 		form_type = 'adj'
+	elif any('ndecl' in name for name in template_names):
+		form_type = 'noun'
+	
+	if form_type is None:
+		if pos == 'noun':
+			form_type = 'noun'
+		elif pos == 'verb':
+			form_type = 'verb'
+		elif pos == 'adjective':
+			form_type = 'adj'
+		elif pos == 'pronoun':
+			form_type = 'pronoun'
 		
 	forms_dict = defaultdict(list)
+	pronoun_form_persons = defaultdict(set)  # Track which persons belong to each form key
 	
 	if form_type:
 		for f in forms:
@@ -598,6 +658,43 @@ def _parse_kaikki_entry(entry):
 							forms_dict['pres pas pp'].append(form_val)
 						elif 'past' in tags:
 							forms_dict['past pas pp'].append(form_val)
+
+				elif form_type == 'pronoun':
+					# Strip parenthetical romanization for pronoun forms
+					# e.g. 'ньо́го (johó, nʹóho*)' -> 'ньо́го'
+					form_val = re.sub(r'\s*\([^)]*[a-zA-Z][^)]*\)\*?', '', form_val).rstrip('*').strip()
+					if not form_val or form_val == '-':
+						continue
+					cases = {'nominative': 'nom', 'genitive': 'gen', 'dative': 'dat', 'accusative': 'acc', 'instrumental': 'ins', 'locative': 'loc', 'vocative': 'voc'}
+					case = None
+					for c_tag, c_val in cases.items():
+						if c_tag in tags:
+							case = c_val
+							break
+					num = None
+					if 'singular' in tags:
+						num = 's'
+					elif 'plural' in tags:
+						num = 'p'
+
+					# Track person and gender for pronoun forms
+					person = None
+					if 'first-person' in tags: person = '1'
+					elif 'second-person' in tags: person = '2'
+					elif 'third-person' in tags: person = '3'
+					
+					gender = None
+					if 'masculine' in tags and num == 's': gender = 'm'
+					elif 'feminine' in tags and num == 's': gender = 'f'
+					elif 'neuter' in tags and num == 's': gender = 'n'
+					
+					if case and num:
+						key = f"{case} n{num}"
+						forms_dict[key].append(form_val)
+						# Record person/gender marker for this form
+						if person or gender:
+							person_key = f"{person or 'x'}{gender or 'x'}{num}"
+							pronoun_form_persons[key].add((form_val, person_key))
 			elif form_type == 'adj' and any(tag in tags for tag in ('comparative', 'superlative', 'argumentative', 'adverb')):
 				if 'comparative' in tags:
 					forms_dict['addl comp'].append(form_val)
@@ -609,12 +706,37 @@ def _parse_kaikki_entry(entry):
 					forms_dict['addl adv'].append(form_val)
 	parsed_entries = []
 	for ws, ws_pos, variants in parsed_spellings:
+		entry_forms = dict(forms_dict) if forms_dict else None
+		
+		# For pronouns, filter forms to only include the specific word being processed
+		if form_type == 'pronoun' and entry_forms and pronoun_form_persons:
+			ws_no_accent = ws.replace('́', '')
+			# Find which person/gender this pronoun entry corresponds to
+			target_person_keys = set()
+			for form_key, form_person_pairs in pronoun_form_persons.items():
+				for form_val, person_key in form_person_pairs:
+					if form_val.replace('́', '') == ws_no_accent:
+						target_person_keys.add(person_key)
+			
+			# If we found person/gender markers for this word, filter accordingly
+			if target_person_keys:
+				filtered_forms = {}
+				for form_key, form_values in entry_forms.items():
+					# Get the person keys for forms in this case
+					person_keys_for_case = {pk for fv, pk in pronoun_form_persons[form_key]}
+					# Keep only forms whose person matches the entry
+					filtered_values = [fv for fv, pk in pronoun_form_persons[form_key] if pk in target_person_keys]
+					if filtered_values:
+						filtered_forms[form_key] = filtered_values
+				entry_forms = filtered_forms if filtered_forms else None
+		
+		
 		parsed_entries.append({
 			'word': ws,
 			'pos': ws_pos,
 			'variants': variants or None,
 			'definitions': definitions,
-			'forms': dict(forms_dict) if forms_dict else None,
+			'forms': entry_forms,
 			'form_type': form_type,
 			'info': word_info
 		})
@@ -632,10 +754,10 @@ def _parse_kaikki_entry(entry):
 					parsed_entries.append({
 						'word': candidate,
 						'pos': candidate_pos,
-						'definitions': definitions,
+						'definitions': [],
 						'forms': None,
 						'form_type': None,
-						'info': word_info
+						'info': None
 					})
 					parsed_keys.add((candidate, candidate_pos))
 
@@ -704,7 +826,7 @@ def load_wiktionary_jsonl(kaikki_path):
 		for d in pe['definitions']:
 			if isinstance(d, dict):
 				alert_value = d.get('metadata') if d.get('alert') else False
-				w.add_definition(pos, d['definition'], alert=alert_value)
+				w.add_definition(pos, d['definition'], alert=alert_value, prefix=d.get('prefix'))
 			else:
 				w.add_definition(pos, d)
 
@@ -712,6 +834,6 @@ def load_wiktionary_jsonl(kaikki_path):
 			w.add_variants(pe['variants'])
 		if pe.get('info'):
 			w.add_info(pos, pe['info'])
-		if pe.get('forms') and pe.get('form_type'):
-			w.add_forms(pos, pe['forms'], pe['form_type'])
+		if pe.get('form_type'):
+			w.add_forms(pos, pe.get('forms') or {}, pe['form_type'])
 	return list(words_map.values())

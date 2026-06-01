@@ -10,6 +10,8 @@
   --accent-strong: #ffd24d;
   --stress: #ffd24d;
   --shadow: 0 12px 30px rgba(20, 35, 80, 0.08);
+
+  --list-padding-inline-start: 1.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -102,6 +104,20 @@ input {
 button {
   border: 1px solid transparent;
   cursor: pointer;
+}
+
+/* nested lists */
+:is(ol, ul) > li > :is(ol, ul) {
+  padding-inline-start: var(--list-padding-inline-start);
+}
+
+ol {
+  ol {
+    list-style-type: lower-alpha;
+    ol {
+      list-style-type: lower-roman;
+    }
+  }
 }
 
 .topbar {
@@ -294,7 +310,7 @@ button {
 .entry-list {
   margin: 0;
   padding: 0;
-  list-style-position: inside;
+  padding-inline-start: var(--list-padding-inline-start);
   line-height: 1.6;
 }
 

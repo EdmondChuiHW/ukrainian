@@ -16,6 +16,7 @@ export interface RawDictionaryEntry {
   info?: string;
   grammar?: GrammarInfo;
   defs?: string[];
+  def_prefixes?: (string[] | null)[];
   forms?: DictionaryForms;
   variants?: string[];
   freq?: number;
