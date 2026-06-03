@@ -215,6 +215,7 @@ export const EntryRow: React.FC<EntryRowProps> = ({
                         <MatchAndStressText
                           text={plain.def}
                           matchTerm={query}
+                          lang="en"
                         />
                       </li>
                     );
