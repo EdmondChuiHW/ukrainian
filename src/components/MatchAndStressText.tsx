@@ -34,19 +34,33 @@ export const MatchAndStressText: React.FC<MatchAndStressTextProps> = ({
 function useStressHighlight(text: string) {
   'use memo';
 
+  let offset = 0;
   const stressIndexes: [number, number][] = [];
-  // collect all indexes of stress marks in the text
-  // the indexes should be offset based on the deleted text
-  for (let i = 0; i < text.length - 1; i++) {
-    if (text[i + 1] !== ACCENT_MARK) continue;
+  let normalizedText = '';
+  // Collect all indexes of stress marks in the text.
+  // The indexes should be offset based on the deleted text.
+  // Walk backwards so we find the stress mark first,
+  // then we find the first non-empty char.
+  for (let i = text.length - 1; i >= 0; i--) {
+    if (text[i] !== ACCENT_MARK) {
+      normalizedText = text[i] + normalizedText;
+      continue;
+    }
 
-    const offset = stressIndexes.length;
-    const start = i - offset;
-    const end = start + 1;
+    // sometimes, the accent is preceded by a space due to bad data,
+    // e.g. expected: "з'їси́", actual: "з'їси ́" (between 'и' and ' ́')
+    // so we need to remove that space
+    // and treat the prev char as the stressed one
+    while (text[i - 1] === ' ' && i > 0) {
+      i -= 1;
+    }
+
+    const end = i - offset;
+    const start = end - 1;
     stressIndexes.push([start, end]);
-  }
 
-  const normalizedText = text.replaceAll(ACCENT_MARK, '');
+    offset += 1;
+  }
 
   return [stressIndexes, normalizedText] as const;
 }
@@ -57,7 +71,7 @@ function useMatchHighlight(text: string, matchTerm?: string) {
   const matchIndexes: [number, number][] = [];
   if (!matchTerm) return matchIndexes;
 
-  const noAccents = matchTerm.replaceAll(ACCENT_MARK, '');
+  const noAccents = matchTerm.replaceAll(ACCENT_MARK, '').trim();
   const matches = text.matchAll(new RegExp(RegExp.escape(noAccents), 'gi'));
 
   for (const match of matches) {
@@ -84,9 +98,22 @@ function useHighlightRanges<T extends HTMLElement | null>(
 
     for (const [start, end] of indexRanges) {
       const range = new Range();
-      range.setStart(textNode, start);
-      range.setEnd(textNode, end);
-      ranges.push(range);
+      try {
+        range.setStart(textNode, start);
+        range.setEnd(textNode, end);
+        ranges.push(range);
+      } catch (e: unknown) {
+        // TODO log this or display CTA in the UI to report this
+        console.warn(
+          'Failed to set highlight range. Please open a GitHub issue',
+          {
+            start,
+            end,
+            text: textNode.textContent,
+            error: e,
+          },
+        );
+      }
     }
 
     ranges.forEach((range) => highlight.add(range));
