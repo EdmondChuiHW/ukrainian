@@ -195,6 +195,26 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertEqual(usage.definitions, {'green (colour)': None})
         self.assertEqual(new_usages, [])
 
+    def test_add_inflection_preserves_original_usage_on_alternate_match(self):
+        import dictionary
+
+        word = dictionary.Word('мати')
+        word.add_definition('verb', 'to have')
+        usage = word.usages['verb']
+
+        results = [[
+            'ма́ти',
+            {},
+            {'inf': ['ма́ти']},
+            'verb'
+        ]]
+
+        needs_inflection, new_usages = usage.add_inflection(results)
+
+        self.assertFalse(needs_inflection)
+        self.assertFalse(usage.delete_me)
+        self.assertEqual(len(new_usages), 1)
+
     def test_load_wiktionary_jsonl_preserves_forms_info_and_alerts(self):
         import extract
 

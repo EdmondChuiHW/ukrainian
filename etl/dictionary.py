@@ -302,6 +302,7 @@ class Usage:
 						new_usage.add_forms(forms, form_type)
 						new_usages.append(new_usage)
 						added_flag = True
+						self.delete_me = False
 			elif force:
 				if self.word == found_word:
 					if self.pos in ('noun', 'verb', 'adjective') and self.pos != form_type:
