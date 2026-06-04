@@ -2,9 +2,11 @@ import bz2
 import os
 import re
 import json
+import unicodedata
 import multiprocessing
 from collections import defaultdict
 from copy import deepcopy
+from typing import Optional
 
 from dictionary import Word, cyrillic
 
@@ -36,6 +38,9 @@ _ASPECT_TAGS = {
 	'imperfective': 'imperfective',
 	'perfective': 'perfective',
 }
+
+CANDIDATE_RE = re.compile(r"(?:[А-Яа-яЁёЇїІіЄєҐґ](?:[\u0300-\u036f]*))+", re.UNICODE)
+DIACRITIC_RE = re.compile(r"[\u0300-\u036f]")
 
 # Structured grammar tags that should be excluded from prefix
 # (they're already captured in the grammar field)
@@ -79,6 +84,95 @@ def _build_grammar_info(tags):
 		if tag in _ASPECT_TAGS and info['aspect'] is None:
 			info['aspect'] = _ASPECT_TAGS[tag]
 	return info
+
+
+def _normalize_word(word: str) -> str:
+	if word is None:
+		return ""
+	text = str(word).strip().lower()
+	text = unicodedata.normalize("NFD", text)
+	text = DIACRITIC_RE.sub("", text)
+	text = text.replace("ї", "і").replace("ґ", "г")
+	text = text.replace("`", "").replace("'", "").replace('"', "")
+	text = re.sub(r"\s+", " ", text)
+	return text.strip()
+
+
+def _extract_candidates(raw_value: Optional[str]) -> list:
+	if not raw_value:
+		return []
+	value = str(raw_value)
+	value = re.sub(r"<[^>]+>", "", value)
+	value = value.replace(" or ", ",")
+	candidates = []
+	for chunk in re.split(r"[,/;|]+", value):
+		for match in CANDIDATE_RE.findall(chunk):
+			candidate = _normalize_word(match)
+			if candidate and candidate not in candidates:
+				candidates.append(candidate)
+	return candidates
+
+
+def _opposite_aspect(aspect: Optional[str]) -> Optional[str]:
+	if aspect == 'perfective':
+		return 'imperfective'
+	if aspect == 'imperfective':
+		return 'perfective'
+	return None
+
+
+def _extract_verb_aspect_candidates(entry: dict, source_aspect: Optional[str] = None) -> list:
+	if entry.get('pos') != 'verb':
+		return []
+	source_word = entry.get('word')
+	if not source_word:
+		return []
+	target_aspect = _opposite_aspect(source_aspect)
+	canonical_source = _normalize_word(source_word)
+	candidates = []
+
+	def add_candidate(value):
+		if not value or not isinstance(value, str):
+			return
+		candidate = _normalize_word(value)
+		if candidate and candidate != canonical_source and candidate not in candidates:
+			candidates.append(candidate)
+
+	for form in entry.get('forms', []):
+		tags = [str(t).lower() for t in form.get('tags') or [] if t]
+		if not any(t in ('perfective', 'imperfective') for t in tags):
+			continue
+		if target_aspect and target_aspect not in tags:
+			continue
+		add_candidate(form.get('form'))
+
+	if candidates:
+		return candidates
+
+	for form in entry.get('forms', []):
+		tags = [str(t).lower() for t in form.get('tags') or [] if t]
+		if not any(t in ('perfective', 'imperfective') for t in tags):
+			continue
+		if target_aspect and target_aspect not in tags:
+			continue
+		for link in form.get('links', []):
+			if isinstance(link, (list, tuple)) and link:
+				add_candidate(link[0])
+			elif isinstance(link, str):
+				add_candidate(link)
+
+	if candidates:
+		return candidates
+
+	for head_template in entry.get('head_templates', []):
+		args = head_template.get('args', {})
+		for key in ('impf', 'pf'):
+			if target_aspect and ((key == 'impf' and target_aspect != 'imperfective') or (key == 'pf' and target_aspect != 'perfective')):
+				continue
+			for candidate in _extract_candidates(args.get(key)):
+				add_candidate(candidate)
+
+	return candidates
 
 # Resolve paths relative to this module, not CWD
 _ETL_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -521,6 +615,7 @@ def _parse_kaikki_entry(entry):
 	for sense in entry.get('senses', []):
 		add_word_info_tags(sense.get('tags'))
 	word_info = _build_grammar_info(word_info_tags)
+	aspect_candidates = _extract_verb_aspect_candidates(entry, word_info.get('aspect'))
 	
 	# Determine form_type based on inflection_templates
 	inflection_templates = entry.get('inflection_templates') or []
@@ -722,15 +817,11 @@ def _parse_kaikki_entry(entry):
 			if target_person_keys:
 				filtered_forms = {}
 				for form_key, form_values in entry_forms.items():
-					# Get the person keys for forms in this case
-					person_keys_for_case = {pk for fv, pk in pronoun_form_persons[form_key]}
-					# Keep only forms whose person matches the entry
 					filtered_values = [fv for fv, pk in pronoun_form_persons[form_key] if pk in target_person_keys]
 					if filtered_values:
 						filtered_forms[form_key] = filtered_values
 				entry_forms = filtered_forms if filtered_forms else None
-		
-		
+
 		parsed_entries.append({
 			'word': ws,
 			'pos': ws_pos,
@@ -738,7 +829,8 @@ def _parse_kaikki_entry(entry):
 			'definitions': definitions,
 			'forms': entry_forms,
 			'form_type': form_type,
-			'info': word_info
+			'info': word_info,
+			'aspect_candidates': aspect_candidates if aspect_candidates else None,
 		})
 
 	for relation_source in ('related', 'derived'):
@@ -757,12 +849,12 @@ def _parse_kaikki_entry(entry):
 						'definitions': [],
 						'forms': None,
 						'form_type': None,
-						'info': None
+						'info': None,
+						'aspect_candidates': None,
 					})
 					parsed_keys.add((candidate, candidate_pos))
 
 	return parsed_entries if len(parsed_entries) > 1 else parsed_entries[0]
-
 
 def _parse_chunk_worker(lines_chunk):
 	results = []
@@ -795,7 +887,7 @@ def _iter_jsonl_chunks(file_path, chunk_size=5000):
 			yield chunk
 
 
-def load_wiktionary_jsonl(kaikki_path):
+def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 	if not os.path.exists(kaikki_path):
 		raise FileNotFoundError(f"{kaikki_path} not found")
 
@@ -812,15 +904,20 @@ def load_wiktionary_jsonl(kaikki_path):
 				parsed_entries.append(res)
 	print(f"Merging {len(parsed_entries)} entries in main process...")
 	words_map = {}
+	aspect_pairs = set()
 	for pe in parsed_entries:
 		word_spelling = pe['word']
 		pos = pe['pos']
 		if not word_spelling:
 			continue
 
+		if pe.get('aspect_candidates'):
+			for candidate in pe['aspect_candidates']:
+				if candidate:
+					aspect_pairs.add((word_spelling, candidate))
+
 		if word_spelling not in words_map:
 			words_map[word_spelling] = Word(word_spelling)
-		
 		w = words_map[word_spelling]
 
 		for d in pe['definitions']:
@@ -836,4 +933,7 @@ def load_wiktionary_jsonl(kaikki_path):
 			w.add_info(pos, pe['info'])
 		if pe.get('form_type'):
 			w.add_forms(pos, pe.get('forms') or {}, pe['form_type'])
+
+	if return_aspect_candidates:
+		return list(words_map.values()), aspect_pairs
 	return list(words_map.values())

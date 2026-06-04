@@ -135,6 +135,28 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertEqual(words[0]['counterparts'], [1])
         self.assertEqual(words[1]['counterparts'], [0])
 
+    def test_verb_aspect_candidate_pairs_are_preserved(self):
+        import extract
+
+        sample_jsonl = Path(TEST_DATA_DIR) / 'sample_verb_aspect_candidates.jsonl'
+        sample_jsonl.write_text(
+            json.dumps({
+                'pos': 'verb',
+                'lang': 'Ukrainian',
+                'lang_code': 'uk',
+                'word': 'співати',
+                'forms': [
+                    {'form': 'співати', 'tags': ['canonical', 'imperfective']},
+                    {'form': 'заспівати', 'tags': ['perfective'], 'links': [['заспівати']]},
+                    {'form': 'співа́ти', 'tags': ['imperfective'], 'links': [['співа́ти']]},
+                ],
+            }) + '\n',
+            encoding='utf-8',
+        )
+
+        words, aspect_pairs = extract.load_wiktionary_jsonl(sample_jsonl, return_aspect_candidates=True)
+        self.assertEqual(aspect_pairs, {('співати', 'заспівати')})
+
     def test_inflection_lookup_missing_entry_preserves_usage(self):
         import extract
         import dictionary

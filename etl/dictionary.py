@@ -5,7 +5,7 @@ from copy import deepcopy
 from collections import defaultdict
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set, Tuple
 
 DATA_DIR = os.environ.get('DATA_DIR', 'cache')
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -643,6 +643,7 @@ class Dictionary:
 		self.deletion_log_path = deletion_log_path
 		self.deletions = []
 		self.verb_aspect_counterparts: Optional[Dict[int, List[int]]] = None
+		self.verb_aspect_candidate_pairs: Set[Tuple[str, str]] = set()
 
 	def _handle_no_accent(self, to_add, no_accent):
 		existing_keys = list(self.accentless_words[no_accent])
@@ -698,7 +699,8 @@ class Dictionary:
 		print("adding wiktionary words")
 		print('parsing wiktionary data from jsonl')
 		try:
-			words = extract.load_wiktionary_jsonl(self.kaikki_path)
+			words, candidate_pairs = extract.load_wiktionary_jsonl(self.kaikki_path, return_aspect_candidates=True)
+			self.verb_aspect_candidate_pairs = candidate_pairs
 			for w in words:
 				self.add_to_dictionary(w)
 		except Exception as e:
@@ -763,11 +765,13 @@ class Dictionary:
 
 		jsonl_path = Path(jsonl_path)
 		known_pairs_path = Path(known_pairs_path) if known_pairs_path is not None else None
+		candidate_pairs = self.verb_aspect_candidate_pairs if self.verb_aspect_candidate_pairs else None
 		self.verb_aspect_counterparts = build_verb_counterpart_map(
 			self,
 			jsonl_path,
 			limit=limit,
 			known_pairs_path=known_pairs_path,
+			candidate_pairs=candidate_pairs,
 		)
 
 	def get_dict(self):
