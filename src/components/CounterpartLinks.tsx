@@ -19,7 +19,9 @@ export const CounterpartLinks: FC<CounterpartLinksProps> = ({
   const isVerb = entry.pos === 'verb';
 
   const counterparts = entry.counterparts
-    ?.map((idx) => words[idx])
+    ?.map((idx) =>
+      typeof idx === 'string' ? { word: idx, index: null } : words[idx],
+    )
     .filter(Boolean);
 
   if (!isVerb) return null;
@@ -42,14 +44,17 @@ export const CounterpartLinks: FC<CounterpartLinksProps> = ({
       {counterparts.map((cp, idx) => {
         const noAccentWord = cp.word.replaceAll(ACCENT_MARK, '');
         return (
-          <Fragment key={cp.index}>
+          <Fragment key={cp.index ?? `unknown-${idx}`}>
             <a
               type="button"
               onClick={(e) => {
                 e.preventDefault();
                 onSelectWord(noAccentWord);
               }}
-              className="counterpart-link"
+              className={`counterpart-link ${cp.index === null ? ' missing' : ''}`}
+              title={
+                cp.word + (cp.index === null ? ` (entry does not exist)` : '')
+              }
               href={`/?q=${encodeURIComponent(noAccentWord)}`}
             >
               <MatchAndStressText text={cp.word} matchTerm={query} />

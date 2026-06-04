@@ -220,6 +220,10 @@ ol {
   border-color: var(--border);
 }
 
+.counterpart-link.missing {
+  color: var(--muted);
+}
+
 .list-status {
   padding: 0;
   color: var(--muted);

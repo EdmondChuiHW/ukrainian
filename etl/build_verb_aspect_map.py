@@ -4,7 +4,7 @@ import json
 import re
 import unicodedata
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
 CANDIDATE_RE = re.compile(r"(?:[А-Яа-яЁёЇїІіЄєҐґ](?:[\u0300-\u036f]*))+", re.UNICODE)
 DIACRITIC_RE = re.compile(r"[\u0300-\u036f]")
@@ -37,13 +37,13 @@ def extract_candidates(raw_value: Optional[str]) -> List[str]:
     return candidates
 
 
-def add_mapping(mapping: Dict[int, List[int]], src_indices: Sequence[int], target_indices: Sequence[int]) -> None:
+def add_mapping(mapping: Dict[int, List[Union[int, str]]], src_indices: Sequence[int], target_indices_or_words: Sequence[Union[int, str]]) -> None:
     for src_idx in src_indices:
         mapping.setdefault(src_idx, [])
-        for tgt_idx in target_indices:
+        for tgt_idx in target_indices_or_words:
             if tgt_idx != src_idx and tgt_idx not in mapping[src_idx]:
                 mapping[src_idx].append(tgt_idx)
-    for tgt_idx in target_indices:
+    for tgt_idx in target_indices_or_words:
         mapping.setdefault(tgt_idx, [])
         for src_idx in src_indices:
             if src_idx != tgt_idx and src_idx not in mapping[tgt_idx]:
@@ -128,8 +128,14 @@ def load_known_pairs(path: Path, exact: Dict[str, List[int]], normalized: Dict[s
     return known_count, unmatched_sources, unmatched_targets
 
 
-def sort_mapping_by_frequency(mapping: Dict[int, List[int]], frequency_by_index: Dict[int, Optional[int]]) -> None:
-    def frequency_key(target_idx: int) -> float:
+def sort_mapping_by_frequency(mapping: Dict[int, List[Union[str, int]]], frequency_by_index: Dict[int, Optional[int]]) -> None:
+    def frequency_key(target_idx: Union[int, str]) -> float:
+        # if str, it means the target
+        # is a candidate word without a known index,
+        # so we treat it as infinitely infrequent
+        if isinstance(target_idx, str):
+            return float("inf")
+
         frequency = frequency_by_index.get(target_idx)
         return frequency if frequency is not None else float("inf")
 
@@ -187,7 +193,6 @@ def build_verb_counterpart_map(
 
     total_lines = 0
     candidate_words: Set[str] = set()
-    unmatched_candidates: Set[str] = set()
 
     if candidate_pairs is not None:
         for source_word, candidate in candidate_pairs:
@@ -197,17 +202,18 @@ def build_verb_counterpart_map(
             source_indices = resolve_indices(source_word, exact_lookup, normalized_lookup, verb_indices)
             if not source_indices:
                 continue
-            target_indices: List[int] = []
+            target_indices_or_words: List[Union[int, str]] = []
             resolved = resolve_indices(candidate, exact_lookup, normalized_lookup, verb_indices)
             if resolved:
                 candidate_words.add(candidate)
                 for idx in resolved:
-                    if idx not in target_indices and idx not in source_indices:
-                        target_indices.append(idx)
+                    if idx not in target_indices_or_words and idx not in source_indices:
+                        target_indices_or_words.append(idx)
             else:
-                unmatched_candidates.add(candidate)
-            if target_indices:
-                add_mapping(mapping, source_indices, target_indices)
+                # Frontend will simply display the candidate word if no index is found
+                target_indices_or_words.append(candidate)
+            if target_indices_or_words:
+                add_mapping(mapping, source_indices, target_indices_or_words)
     elif jsonl_path is not None:
         with jsonl_path.open("r", encoding="utf-8") as f:
             for line in f:
@@ -229,17 +235,18 @@ def build_verb_counterpart_map(
                 if not candidates:
                     continue
                 candidate_words.update(candidates)
-                target_indices: List[int] = []
+                target_indices_or_words: List[Union[int, str]] = []
                 for candidate in candidates:
                     resolved = resolve_indices(candidate, exact_lookup, normalized_lookup, verb_indices)
                     if resolved:
                         for idx in resolved:
-                            if idx not in target_indices and idx not in source_indices:
-                                target_indices.append(idx)
+                            if idx not in target_indices_or_words and idx not in source_indices:
+                                target_indices_or_words.append(idx)
                     else:
-                        unmatched_candidates.add(candidate)
-                if target_indices:
-                    add_mapping(mapping, source_indices, target_indices)
+                        # Frontend will simply display the candidate word if no index is found
+                        target_indices_or_words.append(candidate)
+                if target_indices_or_words:
+                    add_mapping(mapping, source_indices, target_indices_or_words)
 
     sort_mapping_by_frequency(mapping, frequency_by_index)
     return mapping
