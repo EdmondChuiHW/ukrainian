@@ -184,13 +184,6 @@ os.makedirs(DATA_DIR, exist_ok=True)
 wiktionary_cache = {}
 inflection_cache = {}
 
-def get_ontolex(raw_dbnary_path, use_cache=True):
-	if use_cache and os.path.exists(raw_dbnary_path):
-		return
-	if not os.path.exists(raw_dbnary_path):
-		raise FileNotFoundError(f"{raw_dbnary_path} not found")
-
-
 # Lazy-loaded offline database
 _wiktionary_database = None
 _wiktionary_index = None

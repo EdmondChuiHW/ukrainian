@@ -11,7 +11,6 @@ TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), 'tests', 'data_temp')
 
 os.environ['KAIKKI_PATH'] = os.path.join(FIXTURES_DIR, 'sample_kaikki.jsonl')
 os.environ['FREQUENCY_CSV_PATH'] = os.path.join(FIXTURES_DIR, 'sample_frequencies.csv')
-os.environ['RAW_DBNARY_PATH'] = os.path.join(FIXTURES_DIR, 'sample_ontolex.ttl')
 os.environ['DATA_DIR'] = TEST_DATA_DIR
 
 # Create temp data directory
@@ -35,26 +34,13 @@ class TestUkrainianETL(unittest.TestCase):
 
     def test_pipeline_integration(self):
         # Import the modules here to ensure environment variables are applied first
-        from ontolex import Ontolex
         from dictionary import Dictionary
 
-        # 1. Parse Ontolex translations offline
-        print("\n--- Running OntoLex Parser ---")
-        o = Ontolex(use_cache=False, use_raw_cache=False, raw_dbnary_path=os.environ['RAW_DBNARY_PATH'])
-        
-        # Verify OntoLex parsed translations
-        ontolex_dict = o.get_dict()
-        self.assertIn("mati", ontolex_dict)
-        self.assertIn("have", ontolex_dict)
-        
-        # 2. Get dictionary from OntoLex
-        d = o.get_dictionary(
+        print("\n--- Building dictionary from Wiktionary data ---")
+        d = Dictionary(
             kaikki_path=os.environ['KAIKKI_PATH'],
             frequency_csv_path=os.environ['FREQUENCY_CSV_PATH'],
         )
-        
-        # 3. Add Wiktionary/Kaikki JSONL words
-        print("\n--- Adding Wiktionary Words ---")
         d.add_wiktionary_words()
         
         # Verify dictionary word entries
