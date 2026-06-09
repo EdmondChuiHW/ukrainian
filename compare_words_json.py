@@ -84,6 +84,7 @@ def normalize_def_string(value: str) -> str:
         " (verb)",
         " (adverb)",
         " (proper noun)",
+        " (interjection)",
     )
     text = value.strip()
     for suffix in suffixes:
@@ -112,7 +113,8 @@ def normalize_grammar_for_pos_compare(value: Any) -> Any:
 
 def normalize_aggregate_for_pos_compare(entry: Dict[str, Any]) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
-    keys = set(entry.keys()) - {"pos", "word_variants"}
+    keys = {"word"}
+    # keys = set(entry.keys()) - {"pos", "word_variants", "forms", "defs"}
     for key in sorted(keys):
         value = entry.get(key)
         if key == "grammar":
