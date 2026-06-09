@@ -2,6 +2,7 @@ import os
 import json
 import extract
 from dictionary import Word, Dictionary
+from itertools import islice
 
 DATA_DIR = os.environ.get('DATA_DIR', 'cache')
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -63,7 +64,7 @@ class Ontolex_Word:
 
 class Ontolex:
 
-	def __init__(self, use_cache=True, use_raw_cache=True, raw_dbnary_path=None):	
+	def __init__(self, use_cache=True, raw_dbnary_path=None):	
 		if not raw_dbnary_path:
 			raise ValueError('raw_dbnary_path is required')
 		self.words = {}	
@@ -77,7 +78,7 @@ class Ontolex:
 				return
 			except Exception:
 				pass
-		extract.get_ontolex(use_cache=use_raw_cache, raw_dbnary_path=raw_dbnary_path)
+		extract.get_ontolex(use_cache=use_cache, raw_dbnary_path=raw_dbnary_path)
 		self.parse_ontolex(raw_dbnary_path)
 		self.dump('ontolex_data.json', indent=2)
 
