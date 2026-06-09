@@ -13,6 +13,8 @@ def validate_environment(raw_dbnary_path: str, frequency_csv_path: str, kaikki_p
 
     if missing:
         raise FileNotFoundError(f"Missing required ETL source files: {', '.join(missing)}")
+    
+    print (f"Environment validated. Using\nRAW_DBNARY_PATH={raw_dbnary_path}\nFREQUENCY_CSV_PATH={frequency_csv_path}\nKAIKKI_PATH={kaikki_path}")
 
 
 def report_debug_words(dictionary, debug_words: Optional[list[str]] = None, verbose: bool = False) -> None:
@@ -57,7 +59,7 @@ def report_debug_words(dictionary, debug_words: Optional[list[str]] = None, verb
             print("  No deletions")
 
 
-def main(debug_words: Optional[list[str]] = None, verbose: bool = False) -> None:
+def main(debug_words: Optional[list[str]] = None, verbose: bool = False, use_cache: bool = True) -> None:
     if Path.cwd().name != 'etl':
         raise RuntimeError('Run this from the etl directory: cd etl')
 
@@ -72,14 +74,14 @@ def main(debug_words: Optional[list[str]] = None, verbose: bool = False) -> None
 
     raw_dbnary_path = os.environ.get('RAW_DBNARY_PATH', str(source_dir / 'en_dbnary_ontolex.ttl'))
     frequency_csv_path = os.environ.get('FREQUENCY_CSV_PATH', str(source_dir / 'publicist_84k_lex_dict_orig.csv'))
-    kaikki_path = os.environ.get('KAIKKI_PATH', str(source_dir / 'kaikki.org-dictionary-Ukrainian.jsonl'))
+    kaikki_path = os.environ.get('KAIKKI_PATH', str(source_dir / 'kaikki.org-dictionary-en.jsonl'))
     deletion_log_path = os.environ.get('DELETION_LOG_PATH', str(output_dir / 'deletions.json'))
 
     validate_environment(raw_dbnary_path, frequency_csv_path, kaikki_path)
 
     from ontolex import Ontolex
 
-    o = Ontolex(use_cache=True, use_raw_cache=True, raw_dbnary_path=raw_dbnary_path)
+    o = Ontolex(use_cache=use_cache, raw_dbnary_path=raw_dbnary_path)
     d = o.get_dictionary(
         kaikki_path=kaikki_path,
         frequency_csv_path=frequency_csv_path,
@@ -106,6 +108,8 @@ if __name__ == '__main__':
         help='Word to inspect after pipeline completion (repeatable)')
     parser.add_argument('--verbose', action='store_true',
         help='Enable verbose debug reporting')
+    parser.add_argument('--use-cache', action=argparse.BooleanOptionalAction, default=True,
+        help='Enable caching of intermediate results (recommended)')
     args = parser.parse_args()
     debug_words = []
     if args.debug_words:
@@ -114,4 +118,4 @@ if __name__ == '__main__':
         debug_words.extend(args.debug_word)
     if not debug_words:
         debug_words = None
-    main(debug_words=debug_words, verbose=args.verbose)
+    main(debug_words=debug_words, verbose=args.verbose, use_cache=args.use_cache)
