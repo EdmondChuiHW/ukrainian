@@ -781,7 +781,6 @@ class Dictionary:
 		self.clean_alerted_words()
 		self.garbage_collect()
 		self.add_frequencies()
-		self.get_inflections()
 		self.garbage_collect()
 
 	def clean_alerted_words(self):
@@ -811,26 +810,6 @@ class Dictionary:
 				word.add_frequencies(frequencies[word.get_word_no_accent()])
 			else:
 				word.add_frequencies(None)
-
-	def get_inflections(self):
-		import extract
-		print("getting inflections")
-		try:
-			n = len(self.dict.values())
-			for i, word in enumerate(list(self.dict.keys())):
-				if i % 1000 == 0:
-					print(f"{i} of {n}")
-				w = self.dict[word]
-				results = extract.get_inflection(w, self.kaikki_path)
-				new_usages = w.add_inflections(results)
-				for n_u in new_usages:
-					new_w = Word(n_u.word)
-					new_w.usages[n_u.pos] = n_u
-					self.add_to_dictionary(new_w)
-		except Exception as e:
-			raise e
-		finally:
-			extract.dump_inflection_cache()
 
 	def add_verb_aspect_counterparts(self, jsonl_path, known_pairs_path=None, limit=None):
 		from build_verb_aspect_map import build_verb_counterpart_map
