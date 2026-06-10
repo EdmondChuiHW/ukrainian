@@ -1,8 +1,9 @@
 import React, { Fragment } from 'react';
 import MatchAndStressText from './MatchAndStressText';
-import CounterpartLinks from './CounterpartLinks';
+import AspectCounterpartLinks from './AspectCounterpartLinks';
 import FormsTable from './FormsTable';
 import type { DictionaryEntry } from '../types/words';
+import { SynonymLinks } from './SynonymLinks';
 
 interface EntryRowProps {
   entry: DictionaryEntry;
@@ -11,9 +12,16 @@ interface EntryRowProps {
   onSelectWord: (word: string) => void;
 }
 
+interface DefinitionItem {
+  def: string;
+  inlineTags?: string;
+  index: number;
+  synonyms?: Array<number | string>;
+}
+
 interface GroupedDef {
   qualifier?: string;
-  items: Array<GroupedDef | { def: string; inlineTags?: string }>;
+  items: Array<GroupedDef | DefinitionItem>;
 }
 
 const countTagFrequencies = (
@@ -48,14 +56,21 @@ const getMostFrequentTag = (
 };
 
 const buildGroupedDefinitions = (
-  definitions: Array<{ def: string; tags: string[] }>,
-): Array<GroupedDef | { def: string; inlineTags?: string }> => {
+  definitions: Array<{
+    def: string;
+    tags: string[];
+    index: number;
+    synonyms?: Array<number | string>;
+  }>,
+): Array<GroupedDef | DefinitionItem> => {
   const mostFrequentTag = getMostFrequentTag(definitions);
 
   if (!mostFrequentTag) {
-    return definitions.map(({ def, tags }) => ({
+    return definitions.map(({ def, tags, index, synonyms }) => ({
       def,
       inlineTags: tags.length > 0 ? tags.join(', ') : undefined,
+      index,
+      synonyms,
     }));
   }
 
@@ -64,6 +79,8 @@ const buildGroupedDefinitions = (
     tags: string[];
     hasTag: boolean;
     originalIndex: number;
+    index: number;
+    synonyms?: Array<number | string>;
   }> = definitions.map((d, idx) => ({
     ...d,
     hasTag: d.tags.includes(mostFrequentTag),
@@ -75,19 +92,23 @@ const buildGroupedDefinitions = (
 
   const withTag = groupedByTag
     .filter((d) => d.hasTag)
-    .map(({ def, tags }) => ({
+    .map(({ def, tags, index, synonyms }) => ({
       def,
       tags: tags.filter((t) => t !== mostFrequentTag),
+      index,
+      synonyms,
     }));
 
   const withoutTag = groupedByTag
     .filter((d) => !d.hasTag)
-    .map(({ def, tags }) => ({
+    .map(({ def, tags, index, synonyms }) => ({
       def,
       tags,
+      index,
+      synonyms,
     }));
 
-  const items: Array<GroupedDef | { def: string; inlineTags?: string }> = [];
+  const items: Array<GroupedDef | DefinitionItem> = [];
 
   if (
     firstWithoutTagIdx !== -1 &&
@@ -124,10 +145,11 @@ const buildGroupedDefinitions = (
 const groupDefinitions = (
   defs: string[],
   prefixes?: (string[] | null)[],
-): Array<GroupedDef | { def: string; inlineTags?: string }> => {
+  defSynonyms?: Array<Array<number | string>>,
+): Array<GroupedDef | DefinitionItem> => {
   const definitions = defs.map((def, idx) => {
     const prefix = prefixes?.[idx] || [];
-    return { def, tags: prefix };
+    return { def, tags: prefix, index: idx, synonyms: defSynonyms?.[idx] };
   });
 
   return buildGroupedDefinitions(definitions);
@@ -181,7 +203,7 @@ export const EntryRow: React.FC<EntryRowProps> = ({
             {grammarDisplay && ` (${grammarDisplay})`}
           </span>
 
-          <CounterpartLinks
+          <AspectCounterpartLinks
             entry={entry}
             words={words}
             onSelectWord={onSelectWord}
@@ -193,7 +215,7 @@ export const EntryRow: React.FC<EntryRowProps> = ({
           <ol className="entry-list">
             {(() => {
               const renderItems = (
-                items: Array<GroupedDef | { def: string; inlineTags?: string }>,
+                items: Array<GroupedDef | DefinitionItem>,
                 depth = 0,
               ): React.ReactNode => {
                 return items.map((item, idx) => {
@@ -208,7 +230,7 @@ export const EntryRow: React.FC<EntryRowProps> = ({
                       </li>
                     );
                   } else {
-                    const plain = item as { def: string; inlineTags?: string };
+                    const plain = item as DefinitionItem;
                     return (
                       <li key={`${depth}-${idx}`}>
                         {plain.inlineTags && <span>({plain.inlineTags}) </span>}
@@ -216,7 +238,22 @@ export const EntryRow: React.FC<EntryRowProps> = ({
                           text={plain.def}
                           matchTerm={query}
                           lang="en"
+                          className="definition"
                         />
+                        {!!plain.synonyms?.length && (
+                          <ul>
+                            <li>
+                              <SynonymLinks
+                                type="def"
+                                defIndex={idx}
+                                entry={entry}
+                                words={words}
+                                onSelectWord={onSelectWord}
+                                query={query}
+                              />
+                            </li>
+                          </ul>
+                        )}
                       </li>
                     );
                   }
@@ -224,11 +261,23 @@ export const EntryRow: React.FC<EntryRowProps> = ({
               };
 
               return renderItems(
-                groupDefinitions(entry.defs, entry.def_prefixes),
+                groupDefinitions(
+                  entry.defs,
+                  entry.def_prefixes,
+                  entry.def_synonyms,
+                ),
               );
             })()}
           </ol>
         )}
+
+        <SynonymLinks
+          type="entry"
+          entry={entry}
+          words={words}
+          onSelectWord={onSelectWord}
+          query={query}
+        />
       </div>
 
       <div className="col entry-forms-column">

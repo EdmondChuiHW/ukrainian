@@ -5,6 +5,7 @@ interface MatchAndStressTextProps {
   text: string;
   matchTerm?: string;
   lang?: string;
+  className?: string;
 }
 
 const ACCENT_MARK = '\u0301';
@@ -13,6 +14,7 @@ export const MatchAndStressText: React.FC<MatchAndStressTextProps> = ({
   text,
   matchTerm,
   lang = 'uk',
+  className,
 }) => {
   const ref = React.useRef<HTMLSpanElement>(null);
 
@@ -25,7 +27,12 @@ export const MatchAndStressText: React.FC<MatchAndStressTextProps> = ({
   useHighlightRanges('stress', ref, stressIndexes);
 
   return (
-    <span ref={ref} aria-label={text} lang={lang}>
+    <span
+      ref={ref}
+      aria-label={normalizedText !== text ? text : undefined}
+      lang={lang}
+      className={className}
+    >
       {normalizedText}
     </span>
   );

@@ -103,6 +103,8 @@ class Usage:
 		self.definitions = {}
 		self.alerted_definitions = {}
 		self.def_prefixes = {}  # Store prefixes mapped by definition string
+		self.def_synonyms = {}  # Store synonyms mapped by definition string
+		self.synonyms = []
 		self.frequency = None
 		self.forms = {}
 		# Structured grammatical tags instead of raw strings
@@ -115,7 +117,7 @@ class Usage:
 		for d in definitions:
 			self.add_definition(d)
 
-	def add_definition(self, definition, replaced=None, alert=False, prefix=None):
+	def add_definition(self, definition, replaced=None, alert=False, prefix=None, synonyms=None):
 		metadata = None
 		if isinstance(alert, dict):
 			metadata = alert
@@ -125,6 +127,12 @@ class Usage:
 		self.definitions[definition] = replaced
 		if prefix is not None:
 			self.def_prefixes[definition] = prefix
+		if synonyms:
+			if definition not in self.def_synonyms:
+				self.def_synonyms[definition] = []
+			for syn in synonyms:
+				if syn not in self.def_synonyms[definition]:
+					self.def_synonyms[definition].append(syn)
 		# check to ensure definitions are not redundant
 		bad_defs = set()
 		for d1 in self.definitions.keys():
@@ -144,6 +152,7 @@ class Usage:
 			self.definitions.pop(d, None)
 			self.alerted_definitions.pop(d, None)
 			self.def_prefixes.pop(d, None)
+			self.def_synonyms.pop(d, None)
 
 	def _forms_contain_word(self, forms, word):
 		if isinstance(forms, dict):
@@ -262,6 +271,11 @@ class Usage:
 		else:
 			forms = Forms(forms, form_type)
 			self.forms[form_type] = forms
+
+	def add_synonyms(self, synonyms):
+		for syn in synonyms or []:
+			if syn not in self.synonyms:
+				self.synonyms.append(syn)
 
 	def add_frequency(self, frequency):
 		self.frequency = frequency
@@ -389,6 +403,8 @@ class Usage:
 
 	def merge(self, other, accept_alerts=True, use_other_forms=True):
 		new_usage = Usage(self.word, self.pos)
+		new_usage.add_synonyms(self.synonyms)
+		new_usage.add_synonyms(other.synonyms)
 		these_definitions = self.get_definitions()
 		other_definitions = other.get_definitions()
 		min_length = min(len(these_definitions), len(other_definitions))
@@ -397,19 +413,44 @@ class Usage:
 			other_alert = other.alerted_definitions.get(pair[1], False)
 			self_prefix = self.def_prefixes.get(pair[0])
 			other_prefix = other.def_prefixes.get(pair[1])
-			new_usage.add_definition(pair[0], alert=self_alert, prefix=self_prefix)
-			new_usage.add_definition(pair[1], alert=other_alert, prefix=other_prefix)
+			self_synonyms = self.def_synonyms.get(pair[0])
+			other_synonyms = other.def_synonyms.get(pair[1])
+			new_usage.add_definition(
+				pair[0],
+				alert=self_alert,
+				prefix=self_prefix,
+				synonyms=self_synonyms,
+			)
+			new_usage.add_definition(
+				pair[1],
+				alert=other_alert,
+				prefix=other_prefix,
+				synonyms=other_synonyms,
+			)
 		if len(these_definitions) > len(other_definitions):
 			for d in these_definitions[-1 * (len(these_definitions) - min_length):]:
 				prefix = self.def_prefixes.get(d)
-				new_usage.add_definition(d, alert=self.alerted_definitions.get(d, False), prefix=prefix)
+				self_synonyms = self.def_synonyms.get(d)
+				new_usage.add_definition(
+					d,
+					alert=self.alerted_definitions.get(d, False),
+					prefix=prefix,
+					synonyms=self_synonyms,
+				)
 		elif len(other_definitions) > len(these_definitions):
 			for d in other_definitions[-1 * (len(other_definitions) - min_length):]:
 				prefix = other.def_prefixes.get(d)
-				new_usage.add_definition(d, alert=other.alerted_definitions.get(d, False), prefix=prefix)
+				other_synonyms = other.def_synonyms.get(d)
+				new_usage.add_definition(
+					d,
+					alert=other.alerted_definitions.get(d, False),
+					prefix=prefix,
+					synonyms=other_synonyms,
+				)
 		self.definitions = new_usage.definitions
 		self.alerted_definitions = new_usage.alerted_definitions
 		self.def_prefixes = new_usage.def_prefixes
+		self.def_synonyms = new_usage.def_synonyms
 		if use_other_forms:
 			for ft, forms in other.forms.items():
 				if ft in self.forms:
@@ -429,8 +470,18 @@ class Usage:
 				self.def_prefixes[def_str] = prefix
 
 	def get_dict(self, final_forms=False):
-		defs = self.get_definitions()
-		prefixes = [self.def_prefixes.get(d) for d in defs]
+		defs = []
+		prefixes = []
+		def_synonyms = []
+		for d, pov in self.definitions.items():
+			definition = d
+			if pov and pov not in d:
+				definition = f"{d} ({pov})"
+			if d in self.alerted_definitions:
+				continue
+			defs.append(definition)
+			prefixes.append(self.def_prefixes.get(d))
+			def_synonyms.append(self.def_synonyms.get(d) or [])
 		result = {
 			'defs': defs,
 			'freq': self.frequency,
@@ -442,6 +493,10 @@ class Usage:
 			},
 			'forms': self.get_forms(final_forms)
 		}
+		if self.synonyms:
+			result['synonyms'] = self.synonyms
+		if any(def_synonyms):
+			result['def_synonyms'] = def_synonyms
 		# Only include def_prefixes if there are any non-None values
 		if any(p is not None for p in prefixes):
 			result['def_prefixes'] = prefixes
@@ -458,6 +513,7 @@ class Word:
 		self.word_no_accent = self.word.replace("́", "")
 		self.usages = {}
 		self.variants = []
+		self.synonyms = []
 
 	def normalize_pos(pos):
 		replace = {
@@ -478,7 +534,7 @@ class Word:
 	def get_word_no_accent(self):
 		return self.word_no_accent
 
-	def add_definition(self, pos, definition, alert=False, prefix=None):
+	def add_definition(self, pos, definition, alert=False, prefix=None, synonyms=None):
 		if pos is None:
 			pos = 'particle'
 		if pos == 'verb' and len(definition.split()) == 1:
@@ -523,7 +579,15 @@ class Word:
 		else:
 			u = Usage(self.word, pos)
 			self.usages[pos] = u
-		u.add_definition(definition, replaced=replaced, alert=alert, prefix=prefix)
+		if self.synonyms:
+			u.add_synonyms(self.synonyms)
+		u.add_definition(
+			definition,
+			replaced=replaced,
+			alert=alert,
+			prefix=prefix,
+			synonyms=synonyms,
+		)
 
 	def add_variants(self, variants):
 		if not variants:
@@ -534,6 +598,13 @@ class Word:
 
 	def add_variant(self, variant):
 		self.add_variants([variant])
+
+	def add_synonyms(self, synonyms):
+		for syn in synonyms or []:
+			if syn not in self.synonyms:
+				self.synonyms.append(syn)
+		for usage in self.usages.values():
+			usage.add_synonyms(synonyms)
 
 	def merge(self, other):
 		for pos, usage in other.usages.items():
@@ -886,6 +957,45 @@ class Dictionary:
 		)
 		for i, r in enumerate(result):
 			r['index'] = i
+		index_by_word = {}
+		for i, r in enumerate(result):
+			if r['word'] not in index_by_word:
+				index_by_word[r['word']] = i
+			accentless_word = r['word'].replace('́', '')
+			if accentless_word not in index_by_word:
+				index_by_word[accentless_word] = i
+
+		def _resolve_synonym_target(synonym):
+			if isinstance(synonym, int):
+				return synonym
+			candidates = self._find_word_candidates(str(synonym))
+			for candidate in candidates:
+				if candidate in index_by_word:
+					return index_by_word[candidate]
+			return None
+
+		for r in result:
+			if 'synonyms' in r:
+				resolved = []
+				for item in r['synonyms']:
+					if isinstance(item, int):
+						resolved.append(item)
+					else:
+						target = _resolve_synonym_target(item)
+						resolved.append(target if target is not None else item)
+				r['synonyms'] = resolved
+			if 'def_synonyms' in r:
+				resolved_defs = []
+				for syn_list in r['def_synonyms']:
+					resolved_items = []
+					for item in syn_list:
+						if isinstance(item, int):
+							resolved_items.append(item)
+						else:
+							target = _resolve_synonym_target(item)
+							resolved_items.append(target if target is not None else item)
+					resolved_defs.append(resolved_items)
+				r['def_synonyms'] = resolved_defs
 		if self.verb_aspect_counterparts:
 			for r in result:
 				counterparts = self.verb_aspect_counterparts.get(r['index'])

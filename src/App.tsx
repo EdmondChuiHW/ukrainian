@@ -4,6 +4,7 @@ import SearchBar from './components/SearchBar';
 import EntryRow from './components/EntryRow';
 import { normalizeText } from './components/utils';
 import type { DictionaryEntry, RawDictionaryEntry } from './types/words';
+import type { TypeOfUnion } from './types/utils';
 
 const RESULTS_PER_PAGE = 5;
 
@@ -15,35 +16,69 @@ const fetchWords = async () => {
   }
 
   const rawWords = (await wordsRes.json()) as RawDictionaryEntry[];
-  return rawWords.map((entry, idx) => buildIndex(entry, idx));
+  const index = rawWords.map((entry, idx) => buildIndex(entry, idx));
+  linkIndex(index);
+  return index;
 };
 
 const fetchPromise = fetchWords();
 
 const exactMatchScore = (entry: DictionaryEntry, query: string): number => {
-  if (!query) return 0;
-  if (entry.normalizedWord === query) return 4;
-  if (entry.normalizedFormTokens.includes(query)) return 3;
+  if (!query) {
+    return 0;
+  }
+  if (entry.normalizedWord === query) {
+    return 6;
+  }
+  if (entry.normalizedFormTokens.includes(query)) {
+    return 5;
+  }
   if (
     entry.normalizedWord.startsWith(`${query} `) ||
     entry.normalizedWord.endsWith(` ${query}`) ||
     entry.normalizedWord.includes(` ${query} `)
-  )
-    return 3;
+  ) {
+    return 4;
+  }
   if (
     entry.normalizedDefs.includes(query) ||
     entry.normalizedForms.includes(query)
-  )
+  ) {
+    return 3;
+  }
+
+  if (
+    entry.normalizedSynonyms.includes(query) ||
+    entry.normalizedDefSynonyms.includes(query) ||
+    entry.normalizedCounterparts.includes(query)
+  ) {
     return 2;
-  if (entry.normalizedWord.includes(query)) return 1;
+  }
+  if (entry.normalizedWord.includes(query)) {
+    return 1;
+  }
   return 0;
 };
 
 const extractTextArray = (value: unknown): string[] => {
-  if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.flatMap(extractTextArray);
+  return extractArrayOfTypes(value, ['string']);
+};
+
+const extractTextOrNumberArray = (value: unknown): Array<string | number> => {
+  return extractArrayOfTypes(value, ['string', 'number']);
+};
+
+const extractArrayOfTypes = <T extends TypeOfUnion>(
+  value: unknown,
+  types: Array<TypeOfUnion>,
+): T[] => {
+  if (types.includes(typeof value)) return [value as T];
+  if (Array.isArray(value))
+    return value.flatMap((val) => extractArrayOfTypes(val, types));
   if (value && typeof value === 'object')
-    return Object.values(value).flatMap(extractTextArray);
+    return Object.values(value).flatMap((val) =>
+      extractArrayOfTypes(val, types),
+    );
   return [];
 };
 
@@ -66,7 +101,43 @@ const buildIndex = (
     normalizedDefs: normalizeText(entry.defs?.join(' ') ?? ''),
     normalizedForms,
     normalizedFormTokens,
+    normalizedSynonyms: '', // to be filled in linkIndex
+    normalizedDefSynonyms: '', // to be filled in linkIndex
+    normalizedCounterparts: '', // to be filled in linkIndex
   };
+};
+
+const linkIndex = (index: DictionaryEntry[]): void => {
+  for (const entry of index) {
+    if (!entry.normalizedSynonyms) {
+      const synonymTokens = extractTextOrNumberArray(entry.synonyms)
+        .map(resolveLink)
+        .filter(Boolean);
+      entry.normalizedSynonyms = synonymTokens.join(' ');
+    }
+
+    if (!entry.normalizedDefSynonyms) {
+      const defSynonymTokens = (entry.def_synonyms ?? [])
+        .flatMap(extractTextOrNumberArray)
+        .map(resolveLink)
+        .filter(Boolean);
+
+      entry.normalizedDefSynonyms = defSynonymTokens.join(' ');
+    }
+
+    if (!entry.normalizedCounterparts) {
+      const counterpartTokens = extractTextOrNumberArray(entry.counterparts)
+        .map(resolveLink)
+        .filter(Boolean);
+      entry.normalizedCounterparts = counterpartTokens.join(' ');
+    }
+  }
+
+  function resolveLink(val: number | string) {
+    return typeof val === 'number'
+      ? index[val]?.normalizedWord
+      : normalizeText(val);
+  }
 };
 
 export const App: React.FC = () => {
@@ -124,6 +195,8 @@ export const App: React.FC = () => {
           (entry) =>
             entry.normalizedWord.includes(normalizedQuery) ||
             entry.normalizedDefs.includes(normalizedQuery) ||
+            entry.normalizedSynonyms.includes(normalizedQuery) ||
+            entry.normalizedDefSynonyms.includes(normalizedQuery) ||
             entry.normalizedForms.includes(normalizedQuery),
         )
         // sort in place is fine
@@ -147,6 +220,8 @@ export const App: React.FC = () => {
               (entry) =>
                 entry.normalizedWord.includes(candidate) ||
                 entry.normalizedDefs.includes(candidate) ||
+                entry.normalizedSynonyms.includes(candidate) ||
+                entry.normalizedDefSynonyms.includes(candidate) ||
                 entry.normalizedForms.includes(candidate),
             );
             if (matches.length > 0) {

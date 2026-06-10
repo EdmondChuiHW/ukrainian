@@ -113,6 +113,28 @@ def _extract_candidates(raw_value: Optional[str]) -> list:
 	return candidates
 
 
+def _extract_synonyms(raw_synonyms) -> list:
+	synonyms = []
+	if not raw_synonyms:
+		return synonyms
+	for item in raw_synonyms:
+		word = ''
+		if isinstance(item, str):
+			word = item.strip()
+		elif isinstance(item, dict):
+			word = item.get('word') or item.get('alt') or item.get('roman') or ''
+		else:
+			continue
+		word = str(word).strip()
+		if not word:
+			continue
+		if not CANDIDATE_RE.search(word):
+			continue
+		if word not in synonyms:
+			synonyms.append(word)
+	return synonyms
+
+
 def _opposite_aspect(aspect: Optional[str]) -> Optional[str]:
 	if aspect == 'perfective':
 		return 'imperfective'
@@ -550,6 +572,7 @@ def _parse_kaikki_entry(entry):
 	parsed_spellings = collapsed_spellings
 	definitions = []
 	entry_metadata = _parse_relation_metadata(entry)
+	entry_synonyms = _extract_synonyms(entry.get('synonyms'))
 	def _merge_relation_metadata(base, override):
 		if not base:
 			return override
@@ -584,11 +607,13 @@ def _parse_kaikki_entry(entry):
 		combined_metadata = _merge_relation_metadata(entry_metadata, sense_metadata)
 		for g in glosses:
 			alert = bool(combined_metadata)
+			sense_synonyms = _extract_synonyms(sense.get('synonyms'))
 			definitions.append({
 				'definition': g,
 				'prefix': prefix,
 				'alert': alert,
-				'metadata': combined_metadata
+				'metadata': combined_metadata,
+				'synonyms': sense_synonyms,
 			})
 	
 	word_info_tags = []
@@ -820,6 +845,7 @@ def _parse_kaikki_entry(entry):
 			'pos': ws_pos,
 			'variants': variants or None,
 			'definitions': definitions,
+			'synonyms': entry_synonyms or None,
 			'forms': entry_forms,
 			'form_type': form_type,
 			'info': word_info,
@@ -916,10 +942,18 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 		for d in pe['definitions']:
 			if isinstance(d, dict):
 				alert_value = d.get('metadata') if d.get('alert') else False
-				w.add_definition(pos, d['definition'], alert=alert_value, prefix=d.get('prefix'))
+				w.add_definition(
+					pos,
+					d['definition'],
+					alert=alert_value,
+					prefix=d.get('prefix'),
+					synonyms=d.get('synonyms'),
+				)
 			else:
 				w.add_definition(pos, d)
 
+		if pe.get('synonyms'):
+			w.add_synonyms(pe.get('synonyms'))
 		if pe.get('variants'):
 			w.add_variants(pe['variants'])
 		if pe.get('info'):

@@ -17,10 +17,12 @@ export interface RawDictionaryEntry {
   grammar?: GrammarInfo;
   defs?: string[];
   def_prefixes?: (string[] | null)[];
+  def_synonyms?: Array<Array<number | string>>;
   forms?: DictionaryForms;
   variants?: string[];
   freq?: number;
   index?: number;
+  synonyms?: Array<number | string>;
   counterparts?: number[];
 }
 
@@ -30,4 +32,7 @@ export interface DictionaryEntry extends RawDictionaryEntry {
   normalizedDefs: string;
   normalizedForms: string;
   normalizedFormTokens: string[];
+  normalizedSynonyms: string;
+  normalizedDefSynonyms: string;
+  normalizedCounterparts: string;
 }
