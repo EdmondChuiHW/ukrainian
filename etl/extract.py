@@ -6,9 +6,11 @@ import unicodedata
 import multiprocessing
 from collections import defaultdict
 from copy import deepcopy
+from functools import lru_cache
 from typing import Optional
 
 from dictionary import Word, cyrillic
+from helpers import strip_stress
 
 # Prefer a faster JSON parser when available, with a safe json fallback.
 try:
@@ -86,16 +88,9 @@ def _build_grammar_info(tags):
 	return info
 
 
+@lru_cache(maxsize=None)
 def _normalize_word(word: str) -> str:
-	if word is None:
-		return ""
-	text = str(word).strip().lower()
-	text = unicodedata.normalize("NFD", text)
-	text = DIACRITIC_RE.sub("", text)
-	text = text.replace("ї", "і").replace("ґ", "г")
-	text = text.replace("`", "").replace("'", "").replace('"', "")
-	text = re.sub(r"\s+", " ", text)
-	return text.strip()
+	return str(strip_stress(word)).strip().lower()
 
 
 def _extract_candidates(raw_value: Optional[str]) -> list:
@@ -441,9 +436,6 @@ def get_frequency_list(frequency_csv_path):
 def _parse_kaikki_entry(entry):
 	word_spelling = entry.get('word')
 	forms = entry.get('forms', [])
-	
-	def _strip_stress(text):
-		return text.replace('́', '') if text else text
 
 	def _parse_relation_metadata(source):
 		tags = source.get('tags') or []
@@ -542,7 +534,7 @@ def _parse_kaikki_entry(entry):
 	# preserving alternate stress patterns as neutral variant metadata.
 	grouped_spellings = defaultdict(list)
 	for candidate, candidate_pos in parsed_spellings:
-		grouped_spellings[(candidate.replace('́', ''), candidate_pos)].append(candidate)
+		grouped_spellings[(strip_stress(candidate), candidate_pos)].append(candidate)
 
 	collapsed_spellings = []
 	for (base, candidate_pos), spellings in grouped_spellings.items():
@@ -553,8 +545,8 @@ def _parse_kaikki_entry(entry):
 
 		# If the raw lemma is accentless but there are accented canonical forms for
 		# the same base, drop the raw accentless lemma from the group.
-		if word_spelling.replace('́', '') == word_spelling:
-			accented_candidates = [x for x in unique_spellings if x.replace('́', '') != x]
+		if strip_stress(word_spelling) == word_spelling:
+			accented_candidates = [x for x in unique_spellings if strip_stress(x) != x]
 			if accented_candidates and word_spelling in unique_spellings:
 				unique_spellings = [x for x in unique_spellings if x != word_spelling]
 
@@ -562,7 +554,7 @@ def _parse_kaikki_entry(entry):
 			if word_spelling in unique_spellings:
 				primary = word_spelling
 			else:
-				accented_candidates = [x for x in unique_spellings if x.replace('́', '') != x]
+				accented_candidates = [x for x in unique_spellings if strip_stress(x) != x]
 				primary = accented_candidates[0] if accented_candidates else unique_spellings[0]
 			variants = [x for x in unique_spellings if x != primary]
 			collapsed_spellings.append((primary, candidate_pos, variants))
@@ -823,12 +815,12 @@ def _parse_kaikki_entry(entry):
 		
 		# For pronouns, filter forms to only include the specific word being processed
 		if form_type == 'pronoun' and entry_forms and pronoun_form_persons:
-			ws_no_accent = ws.replace('́', '')
+			ws_no_accent = strip_stress(ws)
 			# Find which person/gender this pronoun entry corresponds to
 			target_person_keys = set()
 			for form_key, form_person_pairs in pronoun_form_persons.items():
 				for form_val, person_key in form_person_pairs:
-					if form_val.replace('́', '') == ws_no_accent:
+					if strip_stress(form_val) == ws_no_accent:
 						target_person_keys.add(person_key)
 			
 			# If we found person/gender markers for this word, filter accordingly
@@ -875,6 +867,71 @@ def _parse_kaikki_entry(entry):
 
 	return parsed_entries if len(parsed_entries) > 1 else parsed_entries[0]
 
+
+def _extract_translation_definition(entry, translation, sense=None):
+	if not isinstance(translation, dict):
+		return None
+	if isinstance(sense, dict):
+		for gloss_field in ('raw_glosses', 'glosses'):
+			glosses = sense.get(gloss_field)
+			if isinstance(glosses, list) and glosses:
+				return str(glosses[0]).strip()
+	definition = translation.get('sense') or translation.get('translation') or translation.get('english')
+	if isinstance(definition, str) and definition.strip():
+		return definition.strip()
+	return None
+
+
+def _parse_english_translation_entry(entry):
+	parsed_entries = []
+	seen = set()
+
+	def build_translation_entry(translation, sense_context=None):
+		if not isinstance(translation, dict):
+			return
+		lang_code = str(translation.get('lang_code') or translation.get('code') or '').lower()
+		lang = str(translation.get('lang') or '').lower()
+		if lang_code != 'uk' and lang != 'ukrainian':
+			return
+		word = translation.get('word')
+		if not word or not isinstance(word, str):
+			return
+		if not any(ch in cyrillic for ch in word):
+			return
+		definition = _extract_translation_definition(entry, translation, sense_context)
+		if not definition:
+			return
+		pos = entry.get('pos', 'particle')
+		key = (word.strip(), pos, definition)
+		if key in seen:
+			return
+		seen.add(key)
+		info = _build_grammar_info([t for t in (translation.get('tags') or []) if isinstance(t, str)])
+		parsed_entries.append({
+			'word': word.strip(),
+			'pos': pos,
+			'variants': None,
+			'definitions': [definition],
+			'synonyms': None,
+			'forms': None,
+			'form_type': None,
+			'info': info if any(info.values()) else None,
+			'aspect_candidates': None,
+			'reverse_translation': True,
+		})
+
+	for translation in entry.get('translations', []):
+		build_translation_entry(translation)
+
+	for sense in entry.get('senses', []):
+		if not isinstance(sense, dict):
+			continue
+		for translation in sense.get('translations', []):
+			build_translation_entry(translation, sense_context=sense)
+
+	return parsed_entries
+
+
 def _parse_chunk_worker(lines_chunk):
 	results = []
 	for line in lines_chunk:
@@ -889,6 +946,10 @@ def _parse_chunk_worker(lines_chunk):
 						results.extend(word_data)
 					else:
 						results.append(word_data)
+			elif entry.get('lang') == 'English':
+				reverse_data = _parse_english_translation_entry(entry)
+				if reverse_data:
+					results.extend(reverse_data)
 		except Exception:
 			pass
 	return results
@@ -922,9 +983,14 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 			elif res:
 				parsed_entries.append(res)
 	print(f"Merging {len(parsed_entries)} entries in main process...")
+
+	ukrainian_entries = [pe for pe in parsed_entries if not pe.get('reverse_translation')]
+	reverse_entries = [pe for pe in parsed_entries if pe.get('reverse_translation')]
+	own_accentless = {strip_stress(pe['word']) for pe in ukrainian_entries if pe.get('word')}
+
 	words_map = {}
 	aspect_pairs = set()
-	for pe in parsed_entries:
+	for pe in ukrainian_entries:
 		word_spelling = pe['word']
 		pos = pe['pos']
 		if not word_spelling:
@@ -960,6 +1026,31 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 			w.add_info(pos, pe['info'])
 		if pe.get('form_type'):
 			w.add_forms(pos, pe.get('forms') or {}, pe['form_type'])
+
+	for pe in reverse_entries:
+		word_spelling = pe['word']
+		if not word_spelling:
+			continue
+		if word_spelling in words_map or strip_stress(word_spelling) in own_accentless:
+			continue
+		pos = pe['pos']
+		if word_spelling not in words_map:
+			words_map[word_spelling] = Word(word_spelling)
+		w = words_map[word_spelling]
+		for d in pe['definitions']:
+			if isinstance(d, dict):
+				alert_value = d.get('metadata') if d.get('alert') else False
+				w.add_definition(
+					pos,
+					d['definition'],
+					alert=alert_value,
+					prefix=d.get('prefix'),
+					synonyms=d.get('synonyms'),
+				)
+			else:
+				w.add_definition(pos, d)
+		if pe.get('info'):
+			w.add_info(pos, pe['info'])
 
 	if return_aspect_candidates:
 		return list(words_map.values()), aspect_pairs

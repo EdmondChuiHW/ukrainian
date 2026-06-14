@@ -72,7 +72,7 @@ def main(debug_words: Optional[list[str]] = None, verbose: bool = False) -> None
     os.makedirs(output_dir, exist_ok=True)
 
     frequency_csv_path = os.environ.get('FREQUENCY_CSV_PATH', str(source_dir / 'publicist_84k_lex_dict_orig.csv'))
-    kaikki_path = os.environ.get('KAIKKI_PATH', str(source_dir / 'kaikki.org-dictionary-en.jsonl'))
+    kaikki_path = os.environ.get('KAIKKI_PATH', str(source_dir / 'kaikki.org-dictionary-combined.jsonl'))
     deletion_log_path = os.environ.get('DELETION_LOG_PATH', str(output_dir / 'deletions.json'))
 
     validate_environment(frequency_csv_path, kaikki_path)
@@ -86,7 +86,6 @@ def main(debug_words: Optional[list[str]] = None, verbose: bool = False) -> None
     )
     d.add_wiktionary_words()
     d.add_verb_aspect_counterparts(
-        Path(kaikki_path),
         known_pairs_path=source_dir / 'verb_aspect_known_pairs.json',
     )
 

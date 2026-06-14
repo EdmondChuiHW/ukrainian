@@ -38,9 +38,12 @@ export const MatchAndStressText: React.FC<MatchAndStressTextProps> = ({
   );
 };
 
-function useStressHighlight(text: string) {
+function useStressHighlight(inputText: string) {
   'use memo';
 
+  // Split accent marks so we can "see" it.
+  // e.g. Богдáна (precomposed, length==7) -> Богда́на (decomposed, length==8)
+  const text = inputText.normalize('NFD');
   let offset = 0;
   const stressIndexes: [number, number][] = [];
   let normalizedText = '';

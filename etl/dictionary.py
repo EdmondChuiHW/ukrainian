@@ -1,11 +1,14 @@
 import os
 import json
 import re
+import unicodedata
 from copy import deepcopy
 from collections import defaultdict
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
+
+from helpers import strip_stress
 
 DATA_DIR = os.environ.get('DATA_DIR', 'cache')
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -58,10 +61,10 @@ class Forms:
 			form_list = self.forms[form_id]
 			base_forms = defaultdict(lambda: 0)
 			for f in form_list:
-				base_forms[f.replace("́", "")] = max(base_forms[f.replace("́", "")], f.count("́")) 
+				base_forms[strip_stress(f)] = max(base_forms[strip_stress(f)], f.count("́"))
 			new_form_list = []
 			for f in form_list:
-				if f.count("́") == base_forms[f.replace("́", "")]:
+				if f.count("́") == base_forms[strip_stress(f)]:
 					new_form_list.append(f)
 			self.forms[form_id] = new_form_list
 
@@ -162,9 +165,9 @@ class Usage:
 		elif isinstance(forms, list):
 			if word in forms:
 				return True
-			accentless_word = word.replace('́', '')
+			accentless_word = strip_stress(word)
 			for form in forms:
-				if form.replace('́', '') == accentless_word:
+				if strip_stress(form) == accentless_word:
 					return True
 		return False
 
@@ -377,7 +380,7 @@ class Usage:
 	def get_definition_words(self):
 		results = []
 		for d in self.get_definitions():
-			d = d.replace('́', '')
+			d = strip_stress(d)
 			new_d = ''
 			parenthesis = 0
 			for l in d:
@@ -396,7 +399,7 @@ class Usage:
 		results = []
 		for forms in self.get_forms().values():
 			for f in forms:
-				f = f.replace('́', '')
+				f = strip_stress(f)
 				f = re.sub(r"[^\w']+", ' ', f).strip().split()
 				results += f
 		return results
@@ -510,7 +513,7 @@ class Word:
 		if word == "будова (bud'''o'''wa)":
 			word = 'будова'
 		self.word = word
-		self.word_no_accent = self.word.replace("́", "")
+		self.word_no_accent = strip_stress(self.word)
 		self.usages = {}
 		self.variants = []
 		self.synonyms = []
@@ -683,7 +686,7 @@ class Word:
 			if self.variants:
 				variants = sorted(
 					set(self.variants),
-					key=lambda x: (x.replace('́', ''), x),
+					key=lambda x: (strip_stress(x), x),
 				)
 				base = self.get_word_no_accent()
 				if base != self.word:
@@ -811,15 +814,13 @@ class Dictionary:
 			else:
 				word.add_frequencies(None)
 
-	def add_verb_aspect_counterparts(self, jsonl_path, known_pairs_path=None, limit=None):
+	def add_verb_aspect_counterparts(self, known_pairs_path=None, limit=None):
 		from build_verb_aspect_map import build_verb_counterpart_map
 
-		jsonl_path = Path(jsonl_path)
 		known_pairs_path = Path(known_pairs_path) if known_pairs_path is not None else None
-		candidate_pairs = self.verb_aspect_candidate_pairs if self.verb_aspect_candidate_pairs else None
+		candidate_pairs = self.verb_aspect_candidate_pairs
 		self.verb_aspect_counterparts = build_verb_counterpart_map(
 			self,
-			jsonl_path,
 			limit=limit,
 			known_pairs_path=known_pairs_path,
 			candidate_pairs=candidate_pairs,
@@ -872,7 +873,7 @@ class Dictionary:
 		return False
 
 	def _find_word_candidates(self, query: str) -> List[str]:
-		normalized = query.replace('́', '')
+		normalized = strip_stress(query)
 		candidates = set()
 		if query in self.dict:
 			candidates.add(query)
@@ -883,7 +884,7 @@ class Dictionary:
 
 		cleaned_query = re.sub(r"\s*\b(pf|impf|perfective|imperfective)\b\s*$", '', query, flags=re.IGNORECASE).strip()
 		if cleaned_query and cleaned_query != query:
-			cleaned_normalized = cleaned_query.replace('́', '')
+			cleaned_normalized = strip_stress(cleaned_query)
 			if cleaned_query in self.dict:
 				candidates.add(cleaned_query)
 			if cleaned_normalized in self.accentless_words:
@@ -891,10 +892,10 @@ class Dictionary:
 		return sorted(candidates)
 
 	def _matching_deletions(self, query: str) -> List[Dict[str, Optional[str]]]:
-		normalized = query.replace('́', '')
+		normalized = strip_stress(query)
 		return [
 			deletion for deletion in self.deletions
-			if deletion['word'] == query or deletion['word'].replace('́', '') == normalized
+			if deletion['word'] == query or strip_stress(deletion['word']) == normalized
 		]
 
 	def get_debug_info(self, query_words: List[str]) -> Dict[str, object]:
@@ -940,7 +941,7 @@ class Dictionary:
 		for i, r in enumerate(result):
 			if r['word'] not in index_by_word:
 				index_by_word[r['word']] = i
-			accentless_word = r['word'].replace('́', '')
+			accentless_word = strip_stress(r['word'])
 			if accentless_word not in index_by_word:
 				index_by_word[accentless_word] = i
 

@@ -100,22 +100,9 @@ class TestUkrainianETL(unittest.TestCase):
             {'word': 'заспівати', 'pos': 'verb', 'freq': 2, 'index': 1},
         ]
 
-        sample_jsonl = Path(TEST_DATA_DIR) / 'sample_verb_pairs.jsonl'
-        sample_jsonl.write_text(
-            json.dumps({
-                'pos': 'verb',
-                'word': 'співати',
-                'forms': [
-                    {
-                        'tags': ['perfective'],
-                        'links': [['заспівати']],
-                    },
-                ],
-            }) + '\n',
-            encoding='utf-8',
-        )
+        pairs = [('співати', 'заспівати')]
 
-        mapping = build_verb_counterpart_map(words, sample_jsonl)
+        mapping = build_verb_counterpart_map(words, pairs)
         annotate_words_with_counterparts(words, mapping)
 
         self.assertEqual(words[0]['counterparts'], [1])
@@ -216,6 +203,82 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertEqual(usage.get_forms()['nom ns'], ['Ка́нберра'])
         self.assertIn('gen ns', usage.get_forms())
         self.assertEqual(usage.get_forms()['gen ns'], ['Ка́нберри'])
+
+    def test_load_wiktionary_jsonl_adds_reverse_ukrainian_translations(self):
+        import extract
+
+        sample_jsonl = Path(TEST_DATA_DIR) / 'sample_reverse_uk.jsonl'
+        sample_jsonl.write_text(
+            json.dumps({
+                'word': 'guess',
+                'lang': 'English',
+                'lang_code': 'en',
+                'pos': 'verb',
+                'senses': [
+                    {
+                        'raw_glosses': ['Prediction about the outcome of something'],
+                        'glosses': ['To reach a partly (or totally) unconfirmed conclusion; to engage in conjecture; to speculate.'],
+                        'translations': [
+                            {
+                                'lang': 'Ukrainian',
+                                'code': 'uk',
+                                'lang_code': 'uk',
+                                'sense': 'to reach an unconfirmed conclusion',
+                                'tags': ['imperfective'],
+                                'word': 'до́гад'
+                            }
+                        ]
+                    }
+                ],
+                'translations': []
+            }) + '\n',
+            encoding='utf-8',
+        )
+
+        words = extract.load_wiktionary_jsonl(sample_jsonl)
+        result_words = {w.word: w for w in words}
+        self.assertIn('до́гад', result_words)
+        usage = result_words['до́гад'].usages.get('verb')
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage.get_definitions(), ['Prediction about the outcome of something'])
+
+    def test_load_wiktionary_jsonl_falls_back_to_translation_sense(self):
+        import extract
+
+        sample_jsonl = Path(TEST_DATA_DIR) / 'sample_reverse_uk_fallback.jsonl'
+        sample_jsonl.write_text(
+            json.dumps({
+                'word': 'guess',
+                'lang': 'English',
+                'lang_code': 'en',
+                'pos': 'verb',
+                'senses': [
+                    {
+                        'glosses': [],
+                        'raw_glosses': [],
+                        'translations': [
+                            {
+                                'lang': 'Ukrainian',
+                                'code': 'uk',
+                                'lang_code': 'uk',
+                                'sense': 'to reach an unconfirmed conclusion',
+                                'tags': ['imperfective'],
+                                'word': 'до́гад'
+                            }
+                        ]
+                    }
+                ],
+                'translations': []
+            }) + '\n',
+            encoding='utf-8',
+        )
+
+        words = extract.load_wiktionary_jsonl(sample_jsonl)
+        result_words = {w.word: w for w in words}
+        self.assertIn('до́гад', result_words)
+        usage = result_words['до́гад'].usages.get('verb')
+        self.assertIsNotNone(usage)
+        self.assertEqual(usage.get_definitions(), ['to reach an unconfirmed conclusion'])
 
     def test_parse_kaikki_entry_preserves_multiple_canonical_variants(self):
         import extract
@@ -365,6 +428,13 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertEqual(d.dict['зокре́ма'].get_word_no_accent(), d.dict['зокрема́'].get_word_no_accent())
         self.assertEqual(d.dict['зокре́ма'].usages['adverb'].get_definitions(), ['in particular'])
         self.assertEqual(d.dict['зокрема́'].usages['adverb'].get_definitions(), ['especially'])
+
+    def test_strip_stress_removes_precomposed_accents(self):
+        from helpers import strip_stress
+
+        self.assertEqual(strip_stress('Богдáна'), 'Богданa'.replace('a', 'а'))
+        self.assertEqual(strip_stress('Богда́на'), 'Богданa'.replace('a', 'а'))
+        self.assertEqual(strip_stress('ї'), 'ї')
 
     def test_merge_accentless_placeholder_into_accented_variant(self):
         import dictionary

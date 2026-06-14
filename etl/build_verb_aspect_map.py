@@ -169,10 +169,9 @@ def extract_companion_candidates(entry: dict) -> List[str]:
 
 def build_verb_counterpart_map(
     words_or_dictionary,
-    jsonl_path: Optional[Path] = None,
+    candidate_pairs: Iterable[Tuple[str, str]],
     limit: Optional[int] = None,
     known_pairs_path: Optional[Path] = None,
-    candidate_pairs: Optional[Iterable[Tuple[str, str]]] = None,
 ) -> Dict[int, List[int]]:
     words = (
         words_or_dictionary.get_final_forms()
@@ -194,59 +193,25 @@ def build_verb_counterpart_map(
     total_lines = 0
     candidate_words: Set[str] = set()
 
-    if candidate_pairs is not None:
-        for source_word, candidate in candidate_pairs:
-            if limit is not None and total_lines >= limit:
-                break
-            total_lines += 1
-            source_indices = resolve_indices(source_word, exact_lookup, normalized_lookup, verb_indices)
-            if not source_indices:
-                continue
-            target_indices_or_words: List[Union[int, str]] = []
-            resolved = resolve_indices(candidate, exact_lookup, normalized_lookup, verb_indices)
-            if resolved:
-                candidate_words.add(candidate)
-                for idx in resolved:
-                    if idx not in target_indices_or_words and idx not in source_indices:
-                        target_indices_or_words.append(idx)
-            else:
-                # Frontend will simply display the candidate word if no index is found
-                target_indices_or_words.append(candidate)
-            if target_indices_or_words:
-                add_mapping(mapping, source_indices, target_indices_or_words)
-    elif jsonl_path is not None:
-        with jsonl_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                if limit is not None and total_lines >= limit:
-                    break
-                total_lines += 1
-                if not line.strip():
-                    continue
-                data = json.loads(line)
-                if data.get("pos") != "verb":
-                    continue
-                source_word = data.get("word")
-                if not source_word:
-                    continue
-                source_indices = resolve_indices(source_word, exact_lookup, normalized_lookup, verb_indices)
-                if not source_indices:
-                    continue
-                candidates = extract_companion_candidates(data)
-                if not candidates:
-                    continue
-                candidate_words.update(candidates)
-                target_indices_or_words: List[Union[int, str]] = []
-                for candidate in candidates:
-                    resolved = resolve_indices(candidate, exact_lookup, normalized_lookup, verb_indices)
-                    if resolved:
-                        for idx in resolved:
-                            if idx not in target_indices_or_words and idx not in source_indices:
-                                target_indices_or_words.append(idx)
-                    else:
-                        # Frontend will simply display the candidate word if no index is found
-                        target_indices_or_words.append(candidate)
-                if target_indices_or_words:
-                    add_mapping(mapping, source_indices, target_indices_or_words)
+    for source_word, candidate in candidate_pairs:
+        if limit is not None and total_lines >= limit:
+            break
+        total_lines += 1
+        source_indices = resolve_indices(source_word, exact_lookup, normalized_lookup, verb_indices)
+        if not source_indices:
+            continue
+        target_indices_or_words: List[Union[int, str]] = []
+        resolved = resolve_indices(candidate, exact_lookup, normalized_lookup, verb_indices)
+        if resolved:
+            candidate_words.add(candidate)
+            for idx in resolved:
+                if idx not in target_indices_or_words and idx not in source_indices:
+                    target_indices_or_words.append(idx)
+        else:
+            # Frontend will simply display the candidate word if no index is found
+            target_indices_or_words.append(candidate)
+        if target_indices_or_words:
+            add_mapping(mapping, source_indices, target_indices_or_words)
 
     sort_mapping_by_frequency(mapping, frequency_by_index)
     return mapping
