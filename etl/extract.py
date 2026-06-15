@@ -873,7 +873,7 @@ def _extract_translation_definition(entry, translation, sense=None):
 			glosses = sense.get(gloss_field)
 			if isinstance(glosses, list) and glosses:
 				return str(glosses[0]).strip()
-	definition = translation.get('sense') or translation.get('translation') or translation.get('english')
+	definition = translation.get('sense')
 	if isinstance(definition, str) and definition.strip():
 		return definition.strip()
 	return None
@@ -985,7 +985,13 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 
 	ukrainian_entries = [pe for pe in parsed_entries if not pe.get('reverse_translation')]
 	reverse_entries = [pe for pe in parsed_entries if pe.get('reverse_translation')]
-	own_accentless = {strip_stress(pe['word']) for pe in ukrainian_entries if pe.get('word')}
+	own_accentless = {
+		strip_stress(pe['word'])
+		for pe in ukrainian_entries
+		if pe.get('word') and (
+			pe.get('definitions') or pe.get('forms') or pe.get('info') or pe.get('variants') or pe.get('synonyms')
+		)
+	}
 
 	words_map = {}
 	aspect_pairs = set()
@@ -1030,7 +1036,9 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 		word_spelling = pe['word']
 		if not word_spelling:
 			continue
-		if word_spelling in words_map or strip_stress(word_spelling) in own_accentless:
+		if word_spelling in words_map and words_map[word_spelling].usages:
+			continue
+		if strip_stress(word_spelling) in own_accentless:
 			continue
 		pos = pe['pos']
 		reverse_word = pe.get('reverse_translation_source_word')

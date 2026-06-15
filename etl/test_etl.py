@@ -247,6 +247,62 @@ class TestUkrainianETL(unittest.TestCase):
             'guess',
         )
 
+    def test_load_wiktionary_jsonl_merges_reverse_translation_into_placeholder(self):
+        import extract
+
+        sample_jsonl = Path(TEST_DATA_DIR) / 'sample_reverse_placeholder.jsonl'
+        sample_jsonl.write_text(
+            json.dumps({
+                'word': 'тест',
+                'lang': 'Ukrainian',
+                'pos': 'noun',
+                'related': [
+                    {'word': 'до́помога'}
+                ],
+                'forms': [
+                    {'form': 'тест', 'tags': ['canonical']}
+                ],
+                'senses': [
+                    {'glosses': ['test']}
+                ]
+            }) + '\n' + json.dumps({
+                'word': 'guess',
+                'lang': 'English',
+                'lang_code': 'en',
+                'pos': 'verb',
+                'senses': [
+                    {
+                        'raw_glosses': ['Prediction about help'],
+                        'glosses': ['To ask for help.'],
+                        'translations': [
+                            {
+                                'lang': 'Ukrainian',
+                                'code': 'uk',
+                                'lang_code': 'uk',
+                                'sense': 'to ask for help',
+                                'tags': ['imperfective'],
+                                'word': 'до́помога'
+                            }
+                        ]
+                    }
+                ],
+                'translations': []
+            }) + '\n',
+            encoding='utf-8',
+        )
+
+        words = extract.load_wiktionary_jsonl(sample_jsonl)
+        result_words = {w.word: w for w in words}
+        self.assertIn('до́помога', result_words)
+        usage = result_words['до́помога'].usages.get('verb')
+        self.assertIsNotNone(usage)
+        self.assertTrue(usage.reverse_translation)
+        self.assertEqual(
+            usage.reverse_translation_source_word,
+            'guess',
+        )
+        self.assertEqual(usage.get_definitions(), ['Prediction about help'])
+
     def test_load_wiktionary_jsonl_falls_back_to_translation_sense(self):
         import extract
 
