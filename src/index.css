@@ -225,10 +225,6 @@ ol {
   color: var(--muted);
 }
 
-.definition {
-  font-size: 1.1rem;
-}
-
 .list-status {
   padding: 0;
   color: var(--muted);

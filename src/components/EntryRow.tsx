@@ -265,13 +265,22 @@ export const EntryRow: React.FC<EntryRowProps> = ({
                 });
               };
 
-              return renderItems(
-                groupDefinitions(
-                  entry.defs,
-                  entry.def_prefixes,
-                  entry.def_synonyms,
-                ),
+              const groupDefs = groupDefinitions(
+                entry.defs,
+                entry.def_prefixes,
+                entry.def_synonyms,
               );
+
+              if (entry.reverse_translation_source_word) {
+                return renderItems([
+                  {
+                    qualifier: `Translation of “${entry.reverse_translation_source_word}”`,
+                    items: groupDefs,
+                  },
+                ]);
+              }
+
+              return renderItems(groupDefs);
             })()}
           </ol>
         )}

@@ -869,17 +869,17 @@ def _parse_kaikki_entry(entry):
 	return parsed_entries if len(parsed_entries) > 1 else parsed_entries[0]
 
 
-def _extract_translation_definition(entry, translation, sense=None):
+def _extract_translation_definitions(translation, sense=None):
 	if not isinstance(translation, dict):
 		return None
 	if isinstance(sense, dict):
 		for gloss_field in ('raw_glosses', 'glosses'):
 			glosses = sense.get(gloss_field)
 			if isinstance(glosses, list) and glosses:
-				return str(glosses[0]).strip()
-	definition = translation.get('sense')
-	if isinstance(definition, str) and definition.strip():
-		return definition.strip()
+				return glosses
+	sense = translation.get('sense')
+	if isinstance(sense, str) and sense.strip():
+		return [sense.strip()]
 	return None
 
 
@@ -899,21 +899,22 @@ def _parse_english_translation_entry(entry):
 			return
 		if not any(ch in cyrillic for ch in word):
 			return
-		definition = _extract_translation_definition(entry, translation, sense_context)
-		if not definition:
+		word = word.strip()
+		definitions = _extract_translation_definitions(translation, sense_context)
+		if not definitions:
 			return
 		pos = entry.get('pos', 'particle')
-		key = (word.strip(), pos, definition)
+		key = (word, pos, tuple(definitions))
 		if key in seen:
 			return
 		seen.add(key)
 		info = _build_grammar_info([t for t in (translation.get('tags') or []) if isinstance(t, str)])
 		source_word = entry.get('word') if isinstance(entry.get('word'), str) else None
 		parsed_entries.append({
-			'word': word.strip(),
+			'word': word,
 			'pos': pos,
 			'variants': None,
-			'definitions': [definition],
+			'definitions': definitions,
 			'synonyms': None,
 			'forms': None,
 			'form_type': None,
