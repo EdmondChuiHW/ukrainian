@@ -6,20 +6,14 @@ import unicodedata
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
+from helpers import strip_stress
+
 CANDIDATE_RE = re.compile(r"(?:[А-Яа-яЁёЇїІіЄєҐґ](?:[\u0300-\u036f]*))+", re.UNICODE)
 DIACRITIC_RE = re.compile(r"[\u0300-\u036f]")
 
 
 def normalize_word(word: str) -> str:
-    if word is None:
-        return ""
-    text = str(word).strip().lower()
-    text = unicodedata.normalize("NFD", text)
-    text = DIACRITIC_RE.sub("", text)
-    text = text.replace("ї", "і").replace("ґ", "г")
-    text = text.replace("`", "").replace("'", "").replace('"', "")
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
+    return strip_stress(word)
 
 
 def extract_candidates(raw_value: Optional[str]) -> List[str]:
@@ -170,7 +164,6 @@ def extract_companion_candidates(entry: dict) -> List[str]:
 def build_verb_counterpart_map(
     words_or_dictionary,
     candidate_pairs: Iterable[Tuple[str, str]],
-    limit: Optional[int] = None,
     known_pairs_path: Optional[Path] = None,
 ) -> Dict[int, List[int]]:
     words = (
@@ -190,13 +183,9 @@ def build_verb_counterpart_map(
             mapping,
         )
 
-    total_lines = 0
     candidate_words: Set[str] = set()
 
     for source_word, candidate in candidate_pairs:
-        if limit is not None and total_lines >= limit:
-            break
-        total_lines += 1
         source_indices = resolve_indices(source_word, exact_lookup, normalized_lookup, verb_indices)
         if not source_indices:
             continue

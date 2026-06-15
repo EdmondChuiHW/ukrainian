@@ -23,7 +23,7 @@ const fetchWords = async () => {
 
 const fetchPromise = fetchWords();
 
-const exactMatchScore = (entry: DictionaryEntry, query: string): number => {
+const baseExactMatchScore = (entry: DictionaryEntry, query: string): number => {
   if (!query) {
     return 0;
   }
@@ -58,6 +58,11 @@ const exactMatchScore = (entry: DictionaryEntry, query: string): number => {
     return 1;
   }
   return 0;
+};
+
+const exactMatchScore = (entry: DictionaryEntry, query: string): number => {
+  const score = baseExactMatchScore(entry, query);
+  return entry.reverse_translation ? score - 1 : score;
 };
 
 const extractTextArray = (value: unknown): string[] => {

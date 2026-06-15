@@ -24,6 +24,8 @@ export interface RawDictionaryEntry {
   index?: number;
   synonyms?: Array<number | string>;
   counterparts?: number[];
+  reverse_translation?: boolean;
+  reverse_translation_source_word?: string;
 }
 
 export interface DictionaryEntry extends RawDictionaryEntry {

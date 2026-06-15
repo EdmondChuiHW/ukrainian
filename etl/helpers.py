@@ -64,4 +64,8 @@ def strip_stress(text: Optional[str]) -> str:
     stripped = normalized.replace(STRESS_MARK, '')
 
     # Fix mixed-script entries like 'Богдáна' before returning.
-    return _normalize_mixed_script(stripped)
+    fixed_mixed_script = _normalize_mixed_script(stripped)
+
+    # then normalize back to NFC so decomposed letters like 'и' + breve
+    # recombine into their composed forms (for example, 'й').
+    return unicodedata.normalize('NFC', fixed_mixed_script)

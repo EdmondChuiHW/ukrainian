@@ -114,13 +114,15 @@ class Usage:
 		self.gender = None  # 'male', 'female', 'neuter', or None
 		self.animacy = None  # 'animate', 'inanimate', or None
 		self.aspect = None  # 'imperfective', 'perfective', or None
+		self.reverse_translation = False
+		self.reverse_translation_source_word = None
 		self.delete_me = False
 
 	def add_definitions(self, definitions):
 		for d in definitions:
 			self.add_definition(d)
 
-	def add_definition(self, definition, replaced=None, alert=False, prefix=None, synonyms=None):
+	def add_definition(self, definition, replaced=None, alert=False, prefix=None, synonyms=None, reverse_translation=False, reverse_translation_source_word=None):
 		metadata = None
 		if isinstance(alert, dict):
 			metadata = alert
@@ -136,6 +138,10 @@ class Usage:
 			for syn in synonyms:
 				if syn not in self.def_synonyms[definition]:
 					self.def_synonyms[definition].append(syn)
+		if reverse_translation:
+			self.reverse_translation = True
+			if reverse_translation_source_word:
+				self.reverse_translation_source_word = self.reverse_translation_source_word or reverse_translation_source_word
 		# check to ensure definitions are not redundant
 		bad_defs = set()
 		for d1 in self.definitions.keys():
@@ -467,6 +473,10 @@ class Usage:
 				self.animacy = other.animacy
 			if not self.aspect and other.aspect:
 				self.aspect = other.aspect
+		# Preserve reverse translation metadata when one of the merged usages is reverse translation.
+		if self.reverse_translation or other.reverse_translation:
+			self.reverse_translation = True
+			self.reverse_translation_source_word = self.reverse_translation_source_word or other.reverse_translation_source_word
 		# Merge prefixes
 		for def_str, prefix in other.def_prefixes.items():
 			if def_str not in self.def_prefixes:
@@ -500,6 +510,10 @@ class Usage:
 			result['synonyms'] = self.synonyms
 		if any(def_synonyms):
 			result['def_synonyms'] = def_synonyms
+		if self.reverse_translation:
+			result['reverse_translation'] = True
+			if self.reverse_translation_source_word:
+				result['reverse_translation_source_word'] = self.reverse_translation_source_word
 		# Only include def_prefixes if there are any non-None values
 		if any(p is not None for p in prefixes):
 			result['def_prefixes'] = prefixes
@@ -537,7 +551,7 @@ class Word:
 	def get_word_no_accent(self):
 		return self.word_no_accent
 
-	def add_definition(self, pos, definition, alert=False, prefix=None, synonyms=None):
+	def add_definition(self, pos, definition, alert=False, prefix=None, synonyms=None, reverse_translation=False, reverse_translation_source_word=None):
 		if pos is None:
 			pos = 'particle'
 		if pos == 'verb' and len(definition.split()) == 1:
@@ -590,6 +604,8 @@ class Word:
 			alert=alert,
 			prefix=prefix,
 			synonyms=synonyms,
+			reverse_translation=reverse_translation,
+			reverse_translation_source_word=reverse_translation_source_word
 		)
 
 	def add_variants(self, variants):
@@ -814,14 +830,13 @@ class Dictionary:
 			else:
 				word.add_frequencies(None)
 
-	def add_verb_aspect_counterparts(self, known_pairs_path=None, limit=None):
+	def add_verb_aspect_counterparts(self, known_pairs_path=None):
 		from build_verb_aspect_map import build_verb_counterpart_map
 
 		known_pairs_path = Path(known_pairs_path) if known_pairs_path is not None else None
 		candidate_pairs = self.verb_aspect_candidate_pairs
 		self.verb_aspect_counterparts = build_verb_counterpart_map(
 			self,
-			limit=limit,
 			known_pairs_path=known_pairs_path,
 			candidate_pairs=candidate_pairs,
 		)

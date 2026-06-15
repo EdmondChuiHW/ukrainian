@@ -1,8 +1,6 @@
-import bz2
 import os
 import re
 import json
-import unicodedata
 import multiprocessing
 from collections import defaultdict
 from copy import deepcopy
@@ -88,9 +86,8 @@ def _build_grammar_info(tags):
 	return info
 
 
-@lru_cache(maxsize=None)
 def _normalize_word(word: str) -> str:
-	return str(strip_stress(word)).strip().lower()
+	return strip_stress(word)
 
 
 def _extract_candidates(raw_value: Optional[str]) -> list:
@@ -907,6 +904,7 @@ def _parse_english_translation_entry(entry):
 			return
 		seen.add(key)
 		info = _build_grammar_info([t for t in (translation.get('tags') or []) if isinstance(t, str)])
+		source_word = entry.get('word') if isinstance(entry.get('word'), str) else None
 		parsed_entries.append({
 			'word': word.strip(),
 			'pos': pos,
@@ -918,6 +916,7 @@ def _parse_english_translation_entry(entry):
 			'info': info if any(info.values()) else None,
 			'aspect_candidates': None,
 			'reverse_translation': True,
+			'reverse_translation_source_word': source_word,
 		})
 
 	for translation in entry.get('translations', []):
@@ -1034,6 +1033,7 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 		if word_spelling in words_map or strip_stress(word_spelling) in own_accentless:
 			continue
 		pos = pe['pos']
+		reverse_word = pe.get('reverse_translation_source_word')
 		if word_spelling not in words_map:
 			words_map[word_spelling] = Word(word_spelling)
 		w = words_map[word_spelling]
@@ -1046,9 +1046,16 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 					alert=alert_value,
 					prefix=d.get('prefix'),
 					synonyms=d.get('synonyms'),
+					reverse_translation=True,
+					reverse_translation_source_word=reverse_word,
 				)
 			else:
-				w.add_definition(pos, d)
+				w.add_definition(
+					pos,
+					d,
+					reverse_translation=True,
+					reverse_translation_source_word=reverse_word,
+			)
 		if pe.get('info'):
 			w.add_info(pos, pe['info'])
 

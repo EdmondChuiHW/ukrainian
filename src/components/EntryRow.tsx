@@ -155,9 +155,12 @@ const groupDefinitions = (
   return buildGroupedDefinitions(definitions);
 };
 
-const buildWiktionaryUrl = (word: string = '') => {
+const buildWiktionaryUrl = (word: string, lang: string = 'Ukrainian') => {
   const normalizedWord = word.toString().replaceAll('\u0301', '').trim();
-  return `https://en.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}#Ukrainian`;
+  return [
+    `https://en.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}#${encodeURIComponent(lang)}`,
+    normalizedWord,
+  ] as const;
 };
 
 const formatGrammar = (entry: DictionaryEntry): string | null => {
@@ -181,7 +184,9 @@ export const EntryRow: React.FC<EntryRowProps> = ({
   query,
   onSelectWord,
 }) => {
-  const wiktionaryUrl = buildWiktionaryUrl(entry.word);
+  const [wiktionaryUrl, wiktionaryWord] = entry.reverse_translation_source_word
+    ? buildWiktionaryUrl(entry.reverse_translation_source_word, 'English')
+    : buildWiktionaryUrl(entry.word);
   const grammarDisplay = formatGrammar(entry);
 
   return (
@@ -291,7 +296,7 @@ export const EntryRow: React.FC<EntryRowProps> = ({
           target="_blank"
           rel="noopener noreferrer"
         >
-          View on Wiktionary
+          View “{wiktionaryWord}” on Wiktionary
         </a>
       </p>
     </article>

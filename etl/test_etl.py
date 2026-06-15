@@ -241,6 +241,11 @@ class TestUkrainianETL(unittest.TestCase):
         usage = result_words['до́гад'].usages.get('verb')
         self.assertIsNotNone(usage)
         self.assertEqual(usage.get_definitions(), ['Prediction about the outcome of something'])
+        self.assertTrue(usage.reverse_translation)
+        self.assertEqual(
+            usage.reverse_translation_source_word,
+            'guess',
+        )
 
     def test_load_wiktionary_jsonl_falls_back_to_translation_sense(self):
         import extract
@@ -435,6 +440,12 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertEqual(strip_stress('Богдáна'), 'Богданa'.replace('a', 'а'))
         self.assertEqual(strip_stress('Богда́на'), 'Богданa'.replace('a', 'а'))
         self.assertEqual(strip_stress('ї'), 'ї')
+
+    def test_strip_stress_preserves_composed_cyrillic_letters(self):
+        from helpers import strip_stress
+
+        self.assertEqual(strip_stress('увійти'), 'увійти')
+        self.assertEqual(strip_stress('уві́йти'), 'увійти')
 
     def test_merge_accentless_placeholder_into_accented_variant(self):
         import dictionary
