@@ -616,7 +616,11 @@ def _parse_kaikki_entry(entry):
 	for f in forms:
 		if 'tags' in f and 'canonical' in f['tags']:
 			add_word_info_tags(f['tags'])
-			break
+      # Don't break on the first canonical tag.
+      # There could be multiple, e.g. постаріти
+      # First doesn't have the "perfective" tag, second does.
+			# break
+
 	if entry_metadata:
 		add_word_info_tags(entry_metadata.get('tags'))
 	for sense in entry.get('senses', []):
