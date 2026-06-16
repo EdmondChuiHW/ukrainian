@@ -5,42 +5,51 @@ import AdjectiveTable from './AdjectiveTable';
 import VerbTable from './VerbTable';
 import type { VerbForms } from './VerbTable';
 import GenericForms from './GenericForms';
-
-type FormValue = string | string[];
-
-type FormsMap = Record<string, FormValue>;
+import type {
+  DictionaryForms,
+  FormValue,
+  AdjectiveForms,
+} from '../types/words';
+import { isFormValue } from './utils';
 
 interface FormsTableProps {
-  forms: unknown;
+  forms?: DictionaryForms;
   query: string;
 }
 
-const isSimpleNounForms = (forms: unknown): forms is FormsMap => {
-  if (!forms || typeof forms !== 'object') return false;
+const isSimpleNounForms = (
+  forms: DictionaryForms,
+): forms is Record<string, FormValue> => {
   const keys = Object.keys(forms);
   if (!keys.length) return false;
-  return keys.every((key) => /^(nom|acc|gen|dat|ins|loc|voc) n$/.test(key));
-};
-
-const isNounForms = (forms: unknown): forms is FormsMap => {
-  if (!forms || typeof forms !== 'object') return false;
-  const keys = Object.keys(forms);
-  if (!keys.length) return false;
-  return keys.every((key) =>
-    /^(nom|acc|gen|dat|ins|loc|voc) (ns|np)$/.test(key),
+  return keys.every(
+    (key) =>
+      /^(nom|acc|gen|dat|ins|loc|voc) n$/.test(key) && isFormValue(forms[key]),
   );
 };
 
-const isAdjectiveForms = (forms: unknown): forms is FormsMap => {
-  if (!forms || typeof forms !== 'object') return false;
+const isNounForms = (
+  forms: DictionaryForms,
+): forms is Record<string, FormValue> => {
   const keys = Object.keys(forms);
-  return keys.some((key) =>
-    /^(nom|acc|gen|dat|ins|loc) (am|an|af|ap)$/.test(key),
+  if (!keys.length) return false;
+  return keys.every(
+    (key) =>
+      /^(nom|acc|gen|dat|ins|loc|voc) (ns|np)$/.test(key) &&
+      isFormValue(forms[key]),
   );
 };
 
-const isVerbForms = (forms: unknown): forms is VerbForms => {
-  if (!forms || typeof forms !== 'object') return false;
+const isAdjectiveForms = (forms: DictionaryForms): forms is AdjectiveForms => {
+  const keys = Object.keys(forms);
+  return keys.some(
+    (key) =>
+      /^(nom|acc|gen|dat|ins|loc) (am|an|af|ap)$/.test(key) &&
+      isFormValue(forms[key]),
+  );
+};
+
+const isVerbForms = (forms: DictionaryForms): forms is VerbForms => {
   return ['inf', 'pres', 'past', 'fut', 'imp'].some((key) => key in forms);
 };
 

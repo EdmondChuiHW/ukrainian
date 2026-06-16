@@ -1,9 +1,10 @@
 import React from 'react';
 import MatchAndStressText from './MatchAndStressText';
 import { hasExactCellMatch } from './utils';
+import type { FormValue } from '../types/words';
 
 interface FormCellProps {
-  value: string | string[];
+  value: FormValue;
   query: string;
   tooltip?: string;
   colSpan?: number;
@@ -15,7 +16,7 @@ export const FormCell: React.FC<FormCellProps> = (props) => {
   const isEmptyArray = Array.isArray(value) && value.length === 0;
   const isEmptyString = typeof value === 'string' && !value.trim();
 
-  if (value == null || isEmptyArray || isEmptyString) {
+  if (isEmptyArray || isEmptyString) {
     return (
       <td data-tooltip={tooltip} colSpan={colSpan}>
         <span className="empty-cell">–</span>

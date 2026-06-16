@@ -1,8 +1,12 @@
+import type { FormValue } from '../types/words';
+
 export const ACCENT_MARK = '\u0301';
+
+export const isFormValue = (value: unknown): value is FormValue =>
+  typeof value === 'string' || Array.isArray(value);
 
 export const normalizeText = (text: string = '') => {
   return text
-    .toString()
     .toLowerCase()
     .replaceAll(ACCENT_MARK, '')
     .replaceAll('ї', 'і')
@@ -79,6 +83,7 @@ export const humanizeKey = (key: string): string => {
 export function getHighlight(name: string): Highlight {
   return (
     CSS.highlights.get(name) ??
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     CSS.highlights.set(name, new Highlight()).get(name)!
   );
 }

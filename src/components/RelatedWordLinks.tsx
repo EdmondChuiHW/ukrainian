@@ -20,7 +20,7 @@ export const RelatedWordLinks: FC<RelatedWordLinksProps> = ({
   onSelectWord,
   query,
 }) => {
-  if (!items?.length) return null;
+  if (!items.length) return null;
 
   const resolveLinkItem = (item: number | string) => {
     if (typeof item === 'number') {
@@ -36,7 +36,7 @@ export const RelatedWordLinks: FC<RelatedWordLinksProps> = ({
     <span>
       {title}
       {items
-        ?.map(resolveLinkItem)
+        .map(resolveLinkItem)
         .filter((item) => item.word)
         .map((item, idx) => {
           const noAccentWord = item.word.replaceAll(ACCENT_MARK, '');

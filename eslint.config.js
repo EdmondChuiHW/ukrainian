@@ -12,13 +12,31 @@ export default defineConfig([
     files: ['**/*.{ts,tsx}'],
     extends: [
       js.configs.recommended,
-      tseslint.configs.recommended,
+      tseslint.configs.strictTypeChecked,
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
       eslintConfigPrettier,
     ],
     languageOptions: {
       globals: globals.browser,
+      parserOptions: {
+        projectService: true,
+      },
+    },
+    rules: {
+      '@typescript-eslint/restrict-template-expressions': [
+        'error',
+        {
+          allowNumber: true,
+        },
+      ],
+      '@typescript-eslint/no-confusing-void-expression': [
+        'error',
+        {
+          ignoreVoidOperator: true,
+        },
+      ],
+      '@typescript-eslint/no-meaningless-void-operator': ['off'],
     },
   },
 ]);

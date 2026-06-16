@@ -1,5 +1,10 @@
 export type FormValue = string | string[];
-export type DictionaryForms = Record<string, unknown>;
+export type RawFormValue = FormValue | RawFormObject;
+export interface RawFormObject {
+  [key: string]: RawFormValue | undefined;
+}
+export type DictionaryForms = RawFormObject;
+export type FormsMap = Record<string, FormValue>;
 export type AdjectiveForms = DictionaryForms & {
   addl?: Record<string, FormValue>;
 };

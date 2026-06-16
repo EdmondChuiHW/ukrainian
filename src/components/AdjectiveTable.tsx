@@ -67,7 +67,11 @@ export const AdjectiveTable: React.FC<AdjectiveTableProps> = ({
               {caseLabel}
             </th>
             {CATEGORIES.map(({ key: suffix }) => {
-              const val = forms[`${caseKey} ${suffix}`] || [];
+              const rawValue = forms[`${caseKey} ${suffix}`];
+              const val =
+                typeof rawValue === 'string' || Array.isArray(rawValue)
+                  ? rawValue
+                  : [];
               return (
                 <FormCell
                   key={suffix}
@@ -99,10 +103,7 @@ export const AdjectiveTable: React.FC<AdjectiveTableProps> = ({
                     </React.Fragment>
                   ))
                 ) : (
-                  <MatchAndStressText
-                    text={addlValue as string}
-                    matchTerm={query}
-                  />
+                  <MatchAndStressText text={addlValue} matchTerm={query} />
                 )}
               </td>
             </tr>

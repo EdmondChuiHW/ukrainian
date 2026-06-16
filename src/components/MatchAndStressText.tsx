@@ -52,8 +52,9 @@ function useStressHighlight(inputText: string) {
   // Walk backwards so we find the stress mark first,
   // then we find the first non-empty char.
   for (let i = text.length - 1; i >= 0; i--) {
-    if (text[i] !== ACCENT_MARK) {
-      normalizedText = text[i] + normalizedText;
+    const char = text[i];
+    if (char !== ACCENT_MARK) {
+      normalizedText = `${char}${normalizedText}`;
       continue;
     }
 
@@ -128,7 +129,7 @@ function useHighlightRanges<T extends HTMLElement | null>(
 
     ranges.forEach((range) => highlight.add(range));
 
-    return () => ranges.forEach((range) => highlight.delete(range));
+    return () => void ranges.forEach((range) => highlight.delete(range));
   }, [highlightKey, indexRanges, ref]);
 }
 

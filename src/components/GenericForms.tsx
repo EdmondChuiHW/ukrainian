@@ -1,39 +1,41 @@
 import React from 'react';
 import MatchAndStressText from './MatchAndStressText';
+import type { DictionaryForms, RawFormValue } from '../types/words';
 import { humanizeKey } from './utils';
 
 interface GenericFormsProps {
-  forms: Record<string, unknown>;
+  forms: DictionaryForms;
   query: string;
 }
 
-export const FormValue: React.FC<{ value: unknown; query: string }> = ({
-  value,
-  query,
-}) => {
+const isFormObject = (value: unknown): value is DictionaryForms =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+export const FormValue: React.FC<{
+  value: RawFormValue | undefined;
+  query: string;
+}> = ({ value, query }) => {
   if (Array.isArray(value)) {
     return (
       <div className="form-values">
-        {(value as unknown[]).map((item, idx) => (
+        {value.map((item, idx) => (
           <p key={idx}>
-            <MatchAndStressText text={String(item)} matchTerm={query} />
+            <MatchAndStressText text={item} matchTerm={query} />
           </p>
         ))}
       </div>
     );
   }
 
-  if (value && typeof value === 'object') {
+  if (isFormObject(value)) {
     return (
       <div className="form-nested">
-        {Object.entries(value as Record<string, unknown>).map(
-          ([subKey, subValue]) => (
-            <div key={subKey} className="form-row">
-              <span className="form-label-inline">{humanizeKey(subKey)}</span>
-              <FormValue value={subValue} query={query} />
-            </div>
-          ),
-        )}
+        {Object.entries(value).map(([subKey, subValue]) => (
+          <div key={subKey} className="form-row">
+            <span className="form-label-inline">{humanizeKey(subKey)}</span>
+            <FormValue value={subValue} query={query} />
+          </div>
+        ))}
       </div>
     );
   }

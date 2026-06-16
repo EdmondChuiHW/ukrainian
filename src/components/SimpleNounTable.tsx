@@ -1,5 +1,6 @@
 import React from 'react';
 import FormCell from './FormCell';
+import type { DictionaryForms } from '../types/words';
 
 const CASE_LABELS: { [key: string]: string } = {
   nom: 'Nom.',
@@ -21,10 +22,8 @@ const TOOLTIPS: { [key: string]: string } = {
   voc: 'Vocative/Кличний — direct address',
 };
 
-type FormValue = string | string[];
-
 interface SimpleNounTableProps {
-  forms: Record<string, FormValue>;
+  forms: DictionaryForms;
   query: string;
 }
 
@@ -38,7 +37,11 @@ export const SimpleNounTable: React.FC<SimpleNounTableProps> = ({
         {Object.entries(CASE_LABELS).map(([caseKey, caseLabel]) => {
           const formKey = `${caseKey} n`;
           if (!(formKey in forms)) return null;
-          const val = forms[formKey];
+          const rawValue = forms[formKey];
+          const val =
+            typeof rawValue === 'string' || Array.isArray(rawValue)
+              ? rawValue
+              : [];
           return (
             <tr key={caseKey}>
               <th

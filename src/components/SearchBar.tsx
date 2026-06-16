@@ -6,7 +6,7 @@ export const SearchBar: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleClear = () => {
-    setQuery('');
+    void setQuery('');
     inputRef.current?.focus();
   };
 
@@ -19,7 +19,7 @@ export const SearchBar: React.FC = () => {
     }
     if (!text) return;
 
-    setQuery(text);
+    void setQuery(text);
     inputRef.current?.focus();
   };
 
@@ -40,7 +40,7 @@ export const SearchBar: React.FC = () => {
             placeholder="Search for Ukrainian words or definitions…"
             value={q}
             onChange={(e) =>
-              setQuery(e.target.value, { limitUrlUpdates: debounce(500) })
+              void setQuery(e.target.value, { limitUrlUpdates: debounce(500) })
             }
             autoComplete="off"
             autoCorrect="off"
@@ -66,6 +66,7 @@ export const SearchBar: React.FC = () => {
         <button
           id="pasteSearch"
           type="button"
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises
           onClick={handlePaste}
           className="button button--primary"
           aria-label="Paste from clipboard"

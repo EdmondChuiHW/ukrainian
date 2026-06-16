@@ -156,7 +156,7 @@ const groupDefinitions = (
 };
 
 const buildWiktionaryUrl = (word: string, lang: string = 'Ukrainian') => {
-  const normalizedWord = word.toString().replaceAll('\u0301', '').trim();
+  const normalizedWord = word.replaceAll('\u0301', '').trim();
   return [
     `https://en.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}#${encodeURIComponent(lang)}`,
     normalizedWord,
@@ -227,7 +227,7 @@ export const EntryRow: React.FC<EntryRowProps> = ({
                   const isGrouped = 'qualifier' in item && 'items' in item;
 
                   if (isGrouped) {
-                    const grouped = item as GroupedDef;
+                    const grouped = item;
                     return (
                       <li key={`${depth}-${idx}`}>
                         <span>{grouped.qualifier}</span>

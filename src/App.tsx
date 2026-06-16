@@ -178,19 +178,21 @@ export const App: React.FC = () => {
       }
     };
 
-    loadData();
+    loadData().catch(
+      (e: unknown) => void setError(e instanceof Error ? e.message : String(e)),
+    );
   }, []);
 
   useEffect(() => {
-    const onMessage = (ev: MessageEvent<{ q: string }>): void => {
+    const onMessage = (ev: MessageEvent<{ q: string } | undefined>): void => {
       if (!ev.data?.q) return;
       if (ev.source !== window.opener) return;
 
-      setQuery(ev.data.q);
+      void setQuery(ev.data.q);
     };
     window.addEventListener('message', onMessage);
 
-    return () => window.removeEventListener('message', onMessage);
+    return () => void window.removeEventListener('message', onMessage);
   }, [setQuery]);
 
   const sortedWords = !normalizedQuery
@@ -236,7 +238,7 @@ export const App: React.FC = () => {
           return null;
         })();
 
-  const handleLoadMore = () => setCurrentPage((prev) => prev + 1);
+  const handleLoadMore = () => void setCurrentPage((prev) => prev + 1);
 
   const summaryMessage = (() => {
     if (loading) return 'Loading dictionary...';
@@ -308,6 +310,7 @@ export const App: React.FC = () => {
                 words={words}
                 // highlight the original search term, not the normalized one
                 query={q}
+                // eslint-disable-next-line @typescript-eslint/no-misused-promises
                 onSelectWord={setQuery}
               />
             ))}
@@ -320,7 +323,7 @@ export const App: React.FC = () => {
               {fallbackResult && (
                 <button
                   type="button"
-                  onClick={() => setQuery(fallbackResult.query)}
+                  onClick={() => void setQuery(fallbackResult.query)}
                   className="button button--secondary"
                   style={{ marginTop: '0.75rem', width: 'fit-content' }}
                 >

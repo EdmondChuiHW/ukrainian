@@ -48,6 +48,8 @@ const PRONOUN_MAP: { [tense: string]: { [form: string]: string } } = {
   },
 };
 
+import type { RawFormValue } from '../types/words';
+
 type FormValue = string | string[];
 
 type VerbPpForms = Record<string, FormValue>;
@@ -77,6 +79,7 @@ type ImperativeForms = {
 };
 
 export interface VerbForms {
+  [key: string]: RawFormValue | undefined;
   inf?: FormValue;
   past?: PastForms;
   pres?: PresentFutureForms;
