@@ -36,8 +36,18 @@ export const NounTable: React.FC<NounTableProps> = ({ forms, query }) => {
       <thead>
         <tr className="table-header">
           <th></th>
-          <th data-tooltip={TOOLTIPS.s}>Sing.</th>
-          <th data-tooltip={TOOLTIPS.p}>Plur.</th>
+          <th
+            data-tooltip-id="table-col-header-tooltip"
+            data-tooltip-content={TOOLTIPS.s}
+          >
+            Sing.
+          </th>
+          <th
+            data-tooltip-id="table-col-header-tooltip"
+            data-tooltip-content={TOOLTIPS.p}
+          >
+            Plur.
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -49,20 +59,13 @@ export const NounTable: React.FC<NounTableProps> = ({ forms, query }) => {
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS[caseKey]}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS[caseKey]}
               >
                 {caseLabel}
               </th>
-              <FormCell
-                value={singVal}
-                tooltip={TOOLTIPS[caseKey]}
-                query={query}
-              />
-              <FormCell
-                value={plurVal}
-                tooltip={TOOLTIPS[caseKey]}
-                query={query}
-              />
+              <FormCell value={singVal} query={query} />
+              <FormCell value={plurVal} query={query} />
             </tr>
           );
         })}

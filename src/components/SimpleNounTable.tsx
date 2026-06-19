@@ -1,7 +1,6 @@
 import React from 'react';
 import FormCell from './FormCell';
 import type { DictionaryForms } from '../types/words';
-
 const CASE_LABELS: { [key: string]: string } = {
   nom: 'Nom.',
   acc: 'Acc.',
@@ -47,11 +46,12 @@ export const SimpleNounTable: React.FC<SimpleNounTableProps> = ({
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS[caseKey]}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS[caseKey]}
               >
                 {caseLabel}
               </th>
-              <FormCell value={val} tooltip={TOOLTIPS[caseKey]} query={query} />
+              <FormCell value={val} query={query} />
             </tr>
           );
         })}

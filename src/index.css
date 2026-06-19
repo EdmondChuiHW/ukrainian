@@ -6,9 +6,10 @@
   --text: #11254a;
   --muted: #3e517e;
   --border: #a8b8e4;
-  --accent: #0057b8;
-  --accent-strong: #ffd24d;
-  --stress: #ffd24d;
+  --accent: #0057b7;
+  --accent-light: #87cefa;
+  --accent-strong: #ffd700;
+  --stress: #ffd700;
   --shadow: 0 12px 30px rgba(20, 35, 80, 0.08);
 
   --list-padding-inline-start: 1.5rem;
@@ -22,40 +23,12 @@
     --text: #eef1e2;
     --muted: #9bb0cf;
     --border: #324f83;
-    --accent: #5d90ff;
-    --accent-strong: #ffd24d;
-    --stress: #ffd24d;
+    --accent: #0057b7;
+    --accent-light: #87cefa;
+    --accent-strong: #ffd700;
+    --stress: #ffd700;
     --shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
   }
-}
-
-:root.theme-light,
-html.theme-light,
-body.theme-light {
-  --bg: #f4f5f7;
-  --surface: #ffffff;
-  --surface-strong: #f1f3f5;
-  --text: #111827;
-  --muted: #4b5563;
-  --border: #d1d5db;
-  --accent: #2563eb;
-  --stress: #b91c1c;
-  --shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-}
-
-:root.theme-dark,
-html.theme-dark,
-body.theme-dark {
-  --bg: #07152e;
-  --surface: #0b1935;
-  --surface-strong: #142b52;
-  --text: #eef1e2;
-  --muted: #9bb0cf;
-  --border: #324f83;
-  --accent: #5d90ff;
-  --accent-strong: #ffd24d;
-  --stress: #ffd24d;
-  --shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
 }
 
 *,
@@ -86,7 +59,7 @@ body {
 }
 
 a {
-  color: var(--accent);
+  color: var(--accent-light);
   text-decoration: none;
 }
 
@@ -140,12 +113,8 @@ ol {
   line-height: 1.1;
 }
 
-.brand__title-line {
-  display: block;
-}
-
 .brand__title-line--blue {
-  color: var(--accent);
+  color: var(--accent-light);
 }
 
 .brand__title-line--yellow {
@@ -394,50 +363,9 @@ ol {
   padding-top: 1rem;
 }
 
-[data-tooltip] {
-  position: relative;
-  cursor: help;
-}
-
-.form-cell-label[data-tooltip]::before {
-  left: 0;
-  transform: none;
-}
-
-[data-tooltip]::before {
-  display: none;
-  content: attr(data-tooltip);
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  transform: translateX(-50%);
-  padding: 0.6rem 0.85rem;
-  background: rgba(0, 0, 0, 0.9);
-  color: white;
-  border-radius: 0.5rem;
-  font-size: 0.95rem;
-  font-weight: 500;
-  white-space: nowrap;
-  z-index: 10000;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.1s ease-out;
-}
-
-[data-tooltip]:hover::before {
-  opacity: 1;
-}
-
-@media (prefers-color-scheme: dark) {
-  [data-tooltip]::before {
-    background: rgba(220, 220, 220, 0.95);
-    color: #000;
-  }
-}
-
-.theme-dark [data-tooltip]::before {
-  background: rgba(220, 220, 220, 0.95);
-  color: #000;
+#root .tooltip {
+  color: var(--text);
+  background-color: var(--accent);
 }
 
 .form-row {

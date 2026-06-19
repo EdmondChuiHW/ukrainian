@@ -258,12 +258,12 @@ export const App: React.FC = () => {
       <title>{`${normalizedQuery ? `${normalizedQuery} | ` : ''}Ukrainian Dictionary`}</title>
       <header className="topbar">
         <p className="brand__title">
-          <span className="brand__title-line brand__title-line--blue">
+          <div className="brand__title-line brand__title-line--blue">
             Ukrainian
-          </span>
-          <span className="brand__title-line brand__title-line--yellow">
+          </div>
+          <div className="brand__title-line brand__title-line--yellow">
             Dictionary
-          </span>
+          </div>
         </p>
 
         <SearchBar />

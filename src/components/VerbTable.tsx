@@ -6,6 +6,7 @@ const TOOLTIPS: { [key: string]: string } = {
   inf: 'Infinitive/Інфінітив',
   past: 'Past Tense/Минулий час',
   pres: 'Present Tense/Теперішній час',
+  adv: 'Adverbial Participle/Дієприслівник',
   fut: 'Future Tense/Майбутній час',
   imperative: 'Imperative Mood/Наказовий спосіб',
   '1st': '1st Person/Перша особа (я, ми)',
@@ -129,16 +130,12 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
             <th
               scope="row"
               className="form-cell-label"
-              data-tooltip={TOOLTIPS.inf}
+              data-tooltip-id="table-row-header-tooltip"
+              data-tooltip-content={TOOLTIPS.inf}
             >
               Inf.
             </th>
-            <FormCell
-              value={forms.inf}
-              tooltip={TOOLTIPS.inf}
-              query={query}
-              colSpan={3}
-            />
+            <FormCell value={forms.inf} query={query} colSpan={3} />
           </tr>
         )}
 
@@ -156,15 +153,31 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               >
                 Past
               </th>
-              <th data-tooltip={TOOLTIPS.m}>Male</th>
-              <th data-tooltip={TOOLTIPS.n}>Neuter</th>
-              <th data-tooltip={TOOLTIPS.f}>Fem.</th>
+              <th
+                data-tooltip-id="table-col-header-tooltip"
+                data-tooltip-content={TOOLTIPS.m}
+              >
+                Male
+              </th>
+              <th
+                data-tooltip-id="table-col-header-tooltip"
+                data-tooltip-content={TOOLTIPS.n}
+              >
+                Neuter
+              </th>
+              <th
+                data-tooltip-id="table-col-header-tooltip"
+                data-tooltip-content={TOOLTIPS.f}
+              >
+                Female
+              </th>
             </tr>
             <tr>
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS.s}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS.s}
               >
                 Sing.
               </th>
@@ -184,7 +197,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS.p}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS.p}
               >
                 Plur.
               </th>
@@ -201,7 +215,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                   <th
                     scope="row"
                     className="form-cell-label"
-                    data-tooltip={TOOLTIPS[ppKey]}
+                    data-tooltip-id="table-row-header-tooltip"
+                    data-tooltip-content={TOOLTIPS[ppKey]}
                   >
                     {humanizeKey(ppKey)}
                   </th>
@@ -226,19 +241,36 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS.pres}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS.pres}
               >
                 Pres.
               </th>
-              <th data-tooltip={TOOLTIPS['1st']}>1st</th>
-              <th data-tooltip={TOOLTIPS['2nd']}>2nd</th>
-              <th data-tooltip={TOOLTIPS['3rd']}>3rd</th>
+              <th
+                data-tooltip-id="table-col-header-tooltip"
+                data-tooltip-content={TOOLTIPS['1st']}
+              >
+                1st
+              </th>
+              <th
+                data-tooltip-id="table-col-header-tooltip"
+                data-tooltip-content={TOOLTIPS['2nd']}
+              >
+                2nd
+              </th>
+              <th
+                data-tooltip-id="table-col-header-tooltip"
+                data-tooltip-content={TOOLTIPS['3rd']}
+              >
+                3rd
+              </th>
             </tr>
             <tr>
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS.s}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS.s}
               >
                 Sing.
               </th>
@@ -258,7 +290,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS.p}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS.p}
               >
                 Plur.
               </th>
@@ -280,7 +313,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                   <th
                     scope="row"
                     className="form-cell-label"
-                    data-tooltip={TOOLTIPS[ppKey]}
+                    data-tooltip-id="table-row-header-tooltip"
+                    data-tooltip-content={TOOLTIPS[ppKey]}
                   >
                     {humanizeKey(ppKey)}
                   </th>
@@ -305,19 +339,36 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS.fut}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS.fut}
               >
                 Fut.
               </th>
-              <th data-tooltip={TOOLTIPS['1st']}>1st</th>
-              <th data-tooltip={TOOLTIPS['2nd']}>2nd</th>
-              <th data-tooltip={TOOLTIPS['3rd']}>3rd</th>
+              <th
+                data-tooltip-id="table-col-header-tooltip"
+                data-tooltip-content={TOOLTIPS['1st']}
+              >
+                1st
+              </th>
+              <th
+                data-tooltip-id="table-col-header-tooltip"
+                data-tooltip-content={TOOLTIPS['2nd']}
+              >
+                2nd
+              </th>
+              <th
+                data-tooltip-id="table-col-header-tooltip"
+                data-tooltip-content={TOOLTIPS['3rd']}
+              >
+                3rd
+              </th>
             </tr>
             <tr>
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS.s}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS.s}
               >
                 Sing.
               </th>
@@ -337,7 +388,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS.p}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS.p}
               >
                 Plur.
               </th>
@@ -359,7 +411,8 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                   <th
                     scope="row"
                     className="form-cell-label"
-                    data-tooltip={TOOLTIPS[ppKey]}
+                    data-tooltip-id="table-row-header-tooltip"
+                    data-tooltip-content={TOOLTIPS[ppKey]}
                   >
                     {humanizeKey(ppKey)}
                   </th>
@@ -384,19 +437,31 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS.imperative}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS.imperative}
               >
                 Imp.
               </th>
-              <th data-tooltip={TOOLTIPS['1st']}>1st</th>
-              <th data-tooltip={TOOLTIPS['2nd']}>2nd</th>
-              <th></th>
+              <th
+                data-tooltip-id="table-col-header-tooltip"
+                data-tooltip-content={TOOLTIPS['1st']}
+              >
+                1st
+              </th>
+              <th
+                data-tooltip-id="table-col-header-tooltip"
+                data-tooltip-content={TOOLTIPS['2nd']}
+              >
+                2nd
+              </th>
+              {/* <th></th> */}
             </tr>
             <tr>
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS.s}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS.s}
               >
                 Sing.
               </th>
@@ -412,13 +477,14 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                 )}
                 query={query}
               />
-              <td></td>
+              {/* <td></td> */}
             </tr>
             <tr>
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS.p}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS.p}
               >
                 Plur.
               </th>
@@ -440,7 +506,7 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                 )}
                 query={query}
               />
-              <td></td>
+              {/* <td></td> */}
             </tr>
           </>
         )}

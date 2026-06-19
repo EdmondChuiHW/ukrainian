@@ -11,6 +11,7 @@ import type {
   AdjectiveForms,
 } from '../types/words';
 import { isFormValue } from './utils';
+import { Tooltip } from 'react-tooltip';
 
 interface FormsTableProps {
   forms?: DictionaryForms;
@@ -53,7 +54,7 @@ const isVerbForms = (forms: DictionaryForms): forms is VerbForms => {
   return ['inf', 'pres', 'past', 'fut', 'imp'].some((key) => key in forms);
 };
 
-export const FormsTable: React.FC<FormsTableProps> = ({ forms, query }) => {
+const BaseFormsTable: React.FC<FormsTableProps> = ({ forms, query }) => {
   if (!forms || Object.keys(forms).length === 0) {
     return <p className="indec">Indeclinable</p>;
   }
@@ -75,6 +76,21 @@ export const FormsTable: React.FC<FormsTableProps> = ({ forms, query }) => {
   }
 
   return <GenericForms forms={forms} query={query} />;
+};
+
+export const FormsTable: React.FC<FormsTableProps> = ({ forms, query }) => {
+  return (
+    <>
+      <BaseFormsTable forms={forms} query={query} />
+      <Tooltip id="table-col-header-tooltip" place="top" className="tooltip" />
+      <Tooltip
+        id="table-row-header-tooltip"
+        place="bottom-start"
+        className="tooltip"
+      />
+      <Tooltip id="table-cell-tooltip" place="bottom" className="tooltip" />
+    </>
+  );
 };
 
 export default FormsTable;

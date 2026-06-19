@@ -18,7 +18,11 @@ export const FormCell: React.FC<FormCellProps> = (props) => {
 
   if (isEmptyArray || isEmptyString) {
     return (
-      <td data-tooltip={tooltip} colSpan={colSpan}>
+      <td
+        data-tooltip-id="table-cell-tooltip"
+        data-tooltip-content={tooltip}
+        colSpan={colSpan}
+      >
         <span className="empty-cell">–</span>
       </td>
     );
@@ -39,7 +43,12 @@ export const NonEmptyFormCell: React.FC<FormCellProps> = ({
   const cellClass = isExact ? 'cell-exact' : undefined;
 
   return (
-    <td className={cellClass} data-tooltip={tooltip} colSpan={colSpan}>
+    <td
+      className={cellClass}
+      data-tooltip-id="table-cell-tooltip"
+      data-tooltip-content={tooltip}
+      colSpan={colSpan}
+    >
       {Array.isArray(value) ? (
         value.map((item, idx) => (
           <React.Fragment key={`cell-item-${idx}`}>

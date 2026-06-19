@@ -50,7 +50,11 @@ export const AdjectiveTable: React.FC<AdjectiveTableProps> = ({
         <tr className="table-header">
           <th></th>
           {CATEGORIES.map(({ key, label }) => (
-            <th key={key} data-tooltip={TOOLTIPS[key]}>
+            <th
+              key={key}
+              data-tooltip-id="table-row-header-tooltip"
+              data-tooltip-content={TOOLTIPS[key]}
+            >
               {label}
             </th>
           ))}
@@ -62,7 +66,8 @@ export const AdjectiveTable: React.FC<AdjectiveTableProps> = ({
             <th
               scope="row"
               className="form-cell-label"
-              data-tooltip={TOOLTIPS[caseKey]}
+              data-tooltip-id="table-row-header-tooltip"
+              data-tooltip-content={TOOLTIPS[caseKey]}
             >
               {caseLabel}
             </th>
@@ -72,14 +77,7 @@ export const AdjectiveTable: React.FC<AdjectiveTableProps> = ({
                 typeof rawValue === 'string' || Array.isArray(rawValue)
                   ? rawValue
                   : [];
-              return (
-                <FormCell
-                  key={suffix}
-                  value={val}
-                  tooltip={TOOLTIPS[caseKey]}
-                  query={query}
-                />
-              );
+              return <FormCell key={suffix} value={val} query={query} />;
             })}
           </tr>
         ))}
@@ -90,7 +88,8 @@ export const AdjectiveTable: React.FC<AdjectiveTableProps> = ({
               <th
                 scope="row"
                 className="form-cell-label"
-                data-tooltip={TOOLTIPS[addlKey]}
+                data-tooltip-id="table-row-header-tooltip"
+                data-tooltip-content={TOOLTIPS[addlKey]}
               >
                 {humanizeKey(addlKey)}
               </th>
