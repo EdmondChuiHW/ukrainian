@@ -941,13 +941,12 @@ class Dictionary:
 		for word in self.dict:
 			result += self.dict[word].get_final_form()
 
-		max_freq = max([x['freq'] if x['freq'] else -1 for x in result])
+		max_freq = max([x['freq'] if x['freq'] is not None else -1 for x in result])
 		result = sorted(
-			result, 
+			result,
 			key=lambda x: (
-				x['freq'] if x['freq'] is not None else max_freq + 1, 
-				len(x['word']), 
-				x['word']
+				x['freq'] if x['freq'] is not None else max_freq + 1,
+				len(x['word']),
 			)
 		)
 		for i, r in enumerate(result):

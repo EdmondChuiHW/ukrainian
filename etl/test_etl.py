@@ -92,6 +92,25 @@ class TestUkrainianETL(unittest.TestCase):
             self.assertGreater(len(word_entries), 0)
             self.assertTrue(all('word' in item and 'pos' in item for item in word_entries))
 
+    def test_final_forms_preserve_source_order_for_ties(self):
+        import dictionary
+
+        d = dictionary.Dictionary(kaikki_path='kaikki', frequency_csv_path='freq')
+
+        first = dictionary.Word('чека́ти')
+        first.add_definition('verb', 'to wait')
+        first.add_frequencies([754])
+
+        second = dictionary.Word('че́кати')
+        second.add_definition('verb', 'to check')
+        second.add_frequencies([754])
+
+        d.add_to_dictionary(first)
+        d.add_to_dictionary(second)
+
+        final_forms = d.get_final_forms()
+        self.assertEqual([entry['word'] for entry in final_forms[:2]], ['чека́ти', 'че́кати'])
+
     def test_verb_counterparts_are_embedded_into_final_forms(self):
         from build_verb_aspect_map import build_verb_counterpart_map, annotate_words_with_counterparts
 
