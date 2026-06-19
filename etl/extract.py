@@ -144,13 +144,20 @@ def _extract_verb_aspect_candidates(entry: dict, source_aspect: Optional[str] = 
 	target_aspect = _opposite_aspect(source_aspect)
 	canonical_source = _normalize_word(source_word)
 	candidates = []
+	candidate_norms = set()
 
 	def add_candidate(value):
 		if not value or not isinstance(value, str):
 			return
-		candidate = _normalize_word(value)
-		if candidate and candidate != canonical_source and candidate not in candidates:
+		candidate = value.strip()
+		normalized_candidate = _normalize_word(candidate)
+		# Preserve the original accented candidate text, but prevent duplicate
+		# perfective targets that share the same accentless base. This ensures
+		# почека́ти and зачека́ти are kept distinct while still deduping false
+		# repeats caused by accentless normalization.
+		if candidate and normalized_candidate != canonical_source and normalized_candidate not in candidate_norms:
 			candidates.append(candidate)
+			candidate_norms.add(normalized_candidate)
 
 	for form in entry.get('forms', []):
 		tags = [str(t).lower() for t in form.get('tags') or [] if t]

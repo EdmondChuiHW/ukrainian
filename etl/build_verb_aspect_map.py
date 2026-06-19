@@ -8,6 +8,14 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
 from helpers import strip_stress
 
+# Normalize and casefold exact words so accented variants are matched reliably,
+# while preserving the distinction between different stressed spellings.
+# This prevents accentless lookups from incorrectly conflating words like
+# чека́ти (pf почека́ти or зачека́ти) and че́кати (pf че́кнути)
+# when resolving aspect counterparts.
+def normalize_exact_key(word: str) -> str:
+    return unicodedata.normalize('NFC', word).casefold()
+
 CANDIDATE_RE = re.compile(r"(?:[А-Яа-яЁёЇїІіЄєҐґ](?:[\u0300-\u036f]*))+", re.UNICODE)
 DIACRITIC_RE = re.compile(r"[\u0300-\u036f]")
 
@@ -57,7 +65,10 @@ def build_lookup(words: Sequence[dict]) -> Tuple[Dict[str, List[int]], Dict[str,
             continue
         verb_indices.add(idx)
         word = entry.get("word", "")
-        exact_key = word.casefold()
+        # Store both the exact accented form and the accentless normalized form.
+        # The exact map is used first to avoid mixing distinct stressed verbs that
+        # happen to share the same accentless base.
+        exact_key = normalize_exact_key(word)
         exact.setdefault(exact_key, []).append(idx)
         normalized_key = normalize_word(word)
         normalized.setdefault(normalized_key, []).append(idx)
@@ -69,7 +80,9 @@ def build_lookup(words: Sequence[dict]) -> Tuple[Dict[str, List[int]], Dict[str,
 def resolve_indices(word: str, exact: Dict[str, List[int]], normalized: Dict[str, List[int]], allowed_indices: Set[int]) -> List[int]:
     if word is None:
         return []
-    key = str(word).casefold().strip()
+    # Try an exact accented lookup first. This keeps stressed variants separate
+    # when the source data explicitly refers to a particular accented verb.
+    key = normalize_exact_key(str(word).strip())
     if key in exact:
         return [idx for idx in exact[key] if idx in allowed_indices]
     norm = normalize_word(word)

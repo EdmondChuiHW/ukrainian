@@ -127,6 +127,47 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertEqual(words[0]['counterparts'], [1])
         self.assertEqual(words[1]['counterparts'], [0])
 
+    def test_build_verb_counterpart_map_distinguishes_accented_imperfectives(self):
+        from build_verb_aspect_map import build_verb_counterpart_map
+
+        words = [
+            {'word': 'чека́ти', 'pos': 'verb', 'freq': 754, 'index': 0},
+            {'word': 'че́кати', 'pos': 'verb', 'freq': 754, 'index': 1},
+            {'word': 'почекати', 'pos': 'verb', 'freq': 754, 'index': 2},
+            {'word': 'зачека́ти', 'pos': 'verb', 'freq': 754, 'index': 3},
+            {'word': 'че́кнути', 'pos': 'verb', 'freq': 754, 'index': 4},
+        ]
+        pairs = [
+            ('чека́ти', 'почекати'),
+            ('чека́ти', 'зачека́ти'),
+            ('че́кати', 'че́кнути'),
+        ]
+
+        mapping = build_verb_counterpart_map(words, pairs)
+
+        self.assertEqual(mapping[0], [2, 3])
+        self.assertEqual(mapping[1], [4])
+
+    def test_extract_verb_aspect_candidates_preserves_accented_perfectives(self):
+        from extract import _extract_verb_aspect_candidates
+
+        entry = {
+            'pos': 'verb',
+            'word': 'чека́ти',
+            'aspect': 'imperfective',
+            'forms': [
+                {'form': 'чека́ти', 'tags': ['canonical', 'imperfective']},
+                {'form': 'почека́ти', 'tags': ['perfective']},
+                {'form': 'зачека́ти', 'tags': ['perfective']},
+            ],
+            'head_templates': [
+                {'name': 'uk-verb', 'args': {'1': 'чека́ти', '2': 'impf', 'pf': 'почека́ти,зачека́ти'}}
+            ],
+        }
+
+        candidates = _extract_verb_aspect_candidates(entry, entry['aspect'])
+        self.assertEqual(candidates, ['почека́ти', 'зачека́ти'])
+
     def test_verb_aspect_candidate_pairs_are_preserved(self):
         import extract
 
