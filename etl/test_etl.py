@@ -823,6 +823,20 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertNotIn('relation', alerted_usage.alerted_definitions['abbreviation of Петро'])
         self.assertEqual(sorted(alerted_usage.alerted_definitions['abbreviation of Петро']['relations']), ['abbreviation', 'alt_of'])
 
+    def test_get_dict_preserves_non_form_of_alerted_definitions(self):
+        import dictionary
+
+        usage = dictionary.Usage('Петро', 'noun')
+        metadata = {
+            'relations': ['alt_of', 'abbreviation'],
+            'targets': ['Петро'],
+            'tags': ['alt-of', 'abbreviation']
+        }
+        usage.add_definition('abbreviation of Петро', alert=metadata)
+
+        result = usage.get_dict()
+        self.assertEqual(result['defs'], ['abbreviation of Петро'])
+
     def test_parse_kaikki_entry_variant_relation_metadata(self):
         import extract
 

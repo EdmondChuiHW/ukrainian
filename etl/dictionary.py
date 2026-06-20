@@ -490,7 +490,9 @@ class Usage:
 			definition = d
 			if pov and pov not in d:
 				definition = f"{d} ({pov})"
-			if d in self.alerted_definitions:
+			metadata = self.alerted_definitions.get(d)
+			relations = set(metadata.get('relations', [])) if isinstance(metadata, dict) else set()
+			if relations == {'form_of'}:
 				continue
 			defs.append(definition)
 			prefixes.append(self.def_prefixes.get(d))
