@@ -248,6 +248,16 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertFalse(usage.delete_me)
         self.assertEqual(len(new_usages), 1)
 
+    def test_add_definition_preserves_distinct_meaning_prefixes(self):
+        import dictionary
+
+        usage = dictionary.Usage('вишне́вий', 'adjective')
+        usage.add_definition('cherry')
+        usage.add_definition('cherry red (color)')
+
+        self.assertEqual(set(usage.definitions.keys()), {'cherry', 'cherry red (color)'})
+        self.assertEqual(usage.get_definitions(), ['cherry', 'cherry red (color)'])
+
     def test_load_wiktionary_jsonl_preserves_forms_info_and_alerts(self):
         import extract
 

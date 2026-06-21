@@ -142,26 +142,6 @@ class Usage:
 			self.reverse_translation = True
 			if reverse_translation_source_word:
 				self.reverse_translation_source_word = self.reverse_translation_source_word or reverse_translation_source_word
-		# check to ensure definitions are not redundant
-		bad_defs = set()
-		for d1 in self.definitions.keys():
-			for d2 in self.definitions.keys():
-				new_d = ''
-				parenthesis = 0
-				for d in d2:
-					if d == '(':
-						parenthesis += 1
-					if parenthesis == 0:
-						new_d += d
-					if d == ')':
-						parenthesis -= 1
-				if d1 != d2 and d1.lower() in new_d.lower():
-					bad_defs.add(d1)
-		for d in bad_defs:
-			self.definitions.pop(d, None)
-			self.alerted_definitions.pop(d, None)
-			self.def_prefixes.pop(d, None)
-			self.def_synonyms.pop(d, None)
 
 	def _forms_contain_word(self, forms, word):
 		if isinstance(forms, dict):
