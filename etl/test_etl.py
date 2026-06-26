@@ -617,6 +617,33 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertIn('dat am', d.dict['Є́льський'].usages['adjective'].get_forms())
         self.assertIn('voc am', d.dict['Є́льський'].usages['adjective'].get_forms())
 
+    def test_merge_only_same_base_variants(self):
+        import dictionary
+
+        word = dictionary.Word('зокрема')
+        word.add_definition('adverb', 'in particular')
+
+        other = dictionary.Word('зокрема')
+        other.add_definition('adverb', 'in particular')
+        other.add_variants(['зокрема́', 'письмо'])
+
+        word.merge(other)
+
+        self.assertEqual(word.variants, ['зокрема́'])
+
+    def test_merge_accentless_placeholder_keeps_variant(self):
+        import dictionary
+
+        accented = dictionary.Word('Украї́на')
+        accented.add_definition('noun', 'Ukraine')
+
+        accentless = dictionary.Word('Україна')
+        accentless.add_definition('noun', 'Ukraine')
+
+        accented.merge(accentless)
+
+        self.assertIn('Україна', accented.variants)
+
     def test_word_final_form_includes_variants(self):
         import dictionary
 
@@ -841,11 +868,10 @@ class TestUkrainianETL(unittest.TestCase):
         }
 
         parsed = extract._parse_kaikki_entry(entry)
-        self.assertIsInstance(parsed, list)
-        self.assertEqual(len(parsed), 1)
-        self.assertEqual(parsed[0]['word'], 'вчи́тися')
-        self.assertEqual(parsed[0]['definitions'][0]['definition'], 'reflexive of вчи́ти (včýty); to learn')
-        self.assertEqual(parsed[0]['definitions'][1]['definition'], 'reflexive of вчи́ти (včýty); to study')
+        self.assertIsInstance(parsed, dict)
+        self.assertEqual(parsed['word'], 'вчи́тися')
+        self.assertEqual(parsed['definitions'][0]['definition'], 'reflexive of вчи́ти (včýty); to learn')
+        self.assertEqual(parsed['definitions'][1]['definition'], 'reflexive of вчи́ти (včýty); to study')
 
     def test_find_word_candidates_cleans_form_of_target_when_needed(self):
         import dictionary

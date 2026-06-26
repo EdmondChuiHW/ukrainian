@@ -617,8 +617,11 @@ class Word:
 				self.usages[pos].merge(usage)
 			else:
 				self.usages[pos] = usage
-		self.add_variants(other.variants)
-		if other.word != self.word:
+		self.add_variants([
+			v for v in other.variants
+			if strip_stress(v) == self.get_word_no_accent()
+		])
+		if other.word != self.word and strip_stress(other.word) == self.get_word_no_accent():
 			self.add_variant(other.word)
 
 	def clean_alerted_words(self, dictionary):
