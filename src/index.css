@@ -366,6 +366,7 @@ ol {
 #root .tooltip {
   color: var(--text);
   background-color: var(--accent);
+  opacity: 1;
 }
 
 .form-row {
