@@ -118,9 +118,49 @@ const getVerbFormTooltip = (
 interface VerbTableProps {
   forms: VerbForms;
   query: string;
+  showComplexFutureForms?: boolean;
 }
 
-export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
+const splitFutureFormVariants = (values: string[] = []) => {
+  const simpleForms: string[] = [];
+  const complexForms: string[] = [];
+  // Regex to match future forms that use the auxiliary "буду" (буду, будеш, буде, будемо, будете, будуть) followed by a space.
+  // \u0301? allows for an optional combining acute accent on the "у" in "бу́ду".
+  const futureAuxiliaryRegex = /^бу\u0301?д(?:у|еш|е|емо|ете|уть)\s/u;
+
+  for (const value of values) {
+    // Partition future variants into simple conjugations and auxiliary + infinitive forms.
+    // Example: "бу́ду робити" is complex, "робитиму" is simple.
+    if (futureAuxiliaryRegex.test(value)) {
+      complexForms.push(value);
+    } else {
+      simpleForms.push(value);
+    }
+  }
+
+  return { simpleForms, complexForms };
+};
+
+const getFutureFormValues = (
+  rawValue: FormValue,
+  showComplexFutureForms?: boolean,
+): { table: FormValue; tooltip: FormValue } => {
+  const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+  const { simpleForms, complexForms } = splitFutureFormVariants(values);
+  const all = [...simpleForms, ...complexForms];
+
+  if (showComplexFutureForms) {
+    return { table: all, tooltip: all };
+  }
+
+  return { table: simpleForms, tooltip: all };
+};
+
+export const VerbTable: React.FC<VerbTableProps> = ({
+  forms,
+  query,
+  showComplexFutureForms = false,
+}) => {
   return (
     <table className="form-table">
       <tbody>
@@ -373,12 +413,17 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                 Sing.
               </th>
               {(['1s', '2s', '3s'] as const).map((key) => {
-                const val = forms.fut?.[key] || [];
+                const rawValue = forms.fut?.[key] || [];
+                const { table, tooltip } = getFutureFormValues(
+                  rawValue,
+                  showComplexFutureForms,
+                );
+
                 return (
                   <FormCell
                     key={key}
-                    value={val}
-                    tooltip={getVerbFormTooltip('fut', key, val)}
+                    value={table}
+                    tooltip={getVerbFormTooltip('fut', key, tooltip)}
                     query={query}
                   />
                 );
@@ -394,12 +439,17 @@ export const VerbTable: React.FC<VerbTableProps> = ({ forms, query }) => {
                 Plur.
               </th>
               {(['1p', '2p', '3p'] as const).map((key) => {
-                const val = forms.fut?.[key] || [];
+                const rawValue = forms.fut?.[key] || [];
+                const { table, tooltip } = getFutureFormValues(
+                  rawValue,
+                  showComplexFutureForms,
+                );
+
                 return (
                   <FormCell
                     key={key}
-                    value={val}
-                    tooltip={getVerbFormTooltip('fut', key, val)}
+                    value={table}
+                    tooltip={getVerbFormTooltip('fut', key, tooltip)}
                     query={query}
                   />
                 );

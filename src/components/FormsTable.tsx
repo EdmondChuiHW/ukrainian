@@ -16,6 +16,7 @@ import { Tooltip } from 'react-tooltip';
 interface FormsTableProps {
   forms?: DictionaryForms;
   query: string;
+  showComplexFutureForms?: boolean;
 }
 
 const isSimpleNounForms = (
@@ -54,7 +55,11 @@ const isVerbForms = (forms: DictionaryForms): forms is VerbForms => {
   return ['inf', 'pres', 'past', 'fut', 'imp'].some((key) => key in forms);
 };
 
-const BaseFormsTable: React.FC<FormsTableProps> = ({ forms, query }) => {
+const BaseFormsTable: React.FC<FormsTableProps> = ({
+  forms,
+  query,
+  showComplexFutureForms,
+}) => {
   if (!forms || Object.keys(forms).length === 0) {
     return <p className="indec">Indeclinable</p>;
   }
@@ -72,16 +77,30 @@ const BaseFormsTable: React.FC<FormsTableProps> = ({ forms, query }) => {
   }
 
   if (isVerbForms(forms)) {
-    return <VerbTable forms={forms} query={query} />;
+    return (
+      <VerbTable
+        forms={forms}
+        query={query}
+        showComplexFutureForms={showComplexFutureForms}
+      />
+    );
   }
 
   return <GenericForms forms={forms} query={query} />;
 };
 
-export const FormsTable: React.FC<FormsTableProps> = ({ forms, query }) => {
+export const FormsTable: React.FC<FormsTableProps> = ({
+  forms,
+  query,
+  showComplexFutureForms,
+}) => {
   return (
     <>
-      <BaseFormsTable forms={forms} query={query} />
+      <BaseFormsTable
+        forms={forms}
+        query={query}
+        showComplexFutureForms={showComplexFutureForms}
+      />
       <Tooltip id="table-col-header-tooltip" place="top" className="tooltip" />
       <Tooltip
         id="table-row-header-tooltip"
