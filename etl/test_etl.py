@@ -99,11 +99,11 @@ class TestUkrainianETL(unittest.TestCase):
 
         first = dictionary.Word('чека́ти')
         first.add_definition('verb', 'to wait')
-        first.add_frequencies([754])
+        first.add_frequencies({'verb': 754})
 
         second = dictionary.Word('че́кати')
         second.add_definition('verb', 'to check')
-        second.add_frequencies([754])
+        second.add_frequencies({'verb': 754})
 
         d.add_to_dictionary(first)
         d.add_to_dictionary(second)
@@ -778,8 +778,33 @@ class TestUkrainianETL(unittest.TestCase):
         d.accentless_words[lemma.get_word_no_accent()].add(lemma.word)
 
         alerted_usage.clean_alerted_words(d)
-        self.assertIn('locative singular of скасува́ння (skasuvánnja)', alerted_usage.alerted_definitions)
-        self.assertEqual(alerted_usage.alerted_definitions['locative singular of скасува́ння (skasuvánnja)']['relations'], ['form_of'])
+        self.assertEqual(alerted_usage.alerted_definitions, {})
+        self.assertEqual(alerted_usage.get_definitions(), ['locative singular of скасува́ння (skasuvánnja)'])
+
+    def test_clean_alerted_words_preserves_unresolved_reflexive_form_of(self):
+        import dictionary
+
+        lemma = dictionary.Word('вчи́ти')
+        lemma.add_definition('verb', 'to learn')
+
+        alerted_usage = dictionary.Usage('вчитися', 'verb')
+        alerted_metadata = {
+            'relations': ['form_of'],
+            'targets': ['вчи́ти'],
+            'tags': ['form-of', 'reflexive']
+        }
+        alerted_usage.add_definition('reflexive of вчи́ти (včýty); to learn', alert=alerted_metadata)
+
+        d = dictionary.Dictionary(
+            kaikki_path=os.environ['KAIKKI_PATH'],
+            frequency_csv_path=os.environ['FREQUENCY_CSV_PATH']
+        )
+        d.dict[lemma.word] = lemma
+        d.accentless_words[lemma.get_word_no_accent()].add(lemma.word)
+
+        alerted_usage.clean_alerted_words(d)
+        self.assertEqual(alerted_usage.alerted_definitions, {})
+        self.assertEqual(alerted_usage.get_definitions(), ['reflexive of вчи́ти (včýty); to learn'])
 
     def test_parse_kaikki_entry_includes_links_and_strips_form_of_annotations(self):
         import extract
@@ -798,6 +823,29 @@ class TestUkrainianETL(unittest.TestCase):
         parsed = extract._parse_kaikki_entry(entry)
         self.assertEqual(parsed['definitions'][0]['metadata']['relations'], ['form_of'])
         self.assertEqual(parsed['definitions'][0]['metadata']['targets'], ['ску́чити', 'ску́чити pf'])
+
+    def test_parse_kaikki_entry_drops_alternative_headword_variants(self):
+        import extract
+
+        entry = {
+            'word': 'вчитися',
+            'pos': 'verb',
+            'forms': [
+                {'form': 'вчи́тися', 'tags': ['canonical', 'imperfective']},
+                {'form': 'учи́тися', 'tags': ['alternative']},
+            ],
+            'senses': [
+                {'glosses': ['reflexive of вчи́ти (včýty); to learn'], 'tags': ['form-of', 'reflexive'], 'form_of': [{'word': 'вчи́ти', 'extra': '(včýty); to learn'}]},
+                {'glosses': ['reflexive of вчи́ти (včýty); to study'], 'tags': ['form-of', 'reflexive'], 'form_of': [{'word': 'вчи́ти', 'extra': '(včýty); to study'}]},
+            ]
+        }
+
+        parsed = extract._parse_kaikki_entry(entry)
+        self.assertIsInstance(parsed, list)
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]['word'], 'вчи́тися')
+        self.assertEqual(parsed[0]['definitions'][0]['definition'], 'reflexive of вчи́ти (včýty); to learn')
+        self.assertEqual(parsed[0]['definitions'][1]['definition'], 'reflexive of вчи́ти (včýty); to study')
 
     def test_find_word_candidates_cleans_form_of_target_when_needed(self):
         import dictionary

@@ -524,7 +524,7 @@ def _parse_kaikki_entry(entry):
 		tags = f.get('tags') or []
 		if not candidate or candidate == '-' or 'romanization' in tags:
 			continue
-		if any(tag in tags for tag in ('canonical', 'alternative', 'initialism', 'abbreviation', 'variant', 'diminutive', 'augmentative', 'contraction')):
+		if any(tag in tags for tag in ('canonical', 'initialism', 'abbreviation', 'variant', 'diminutive', 'augmentative', 'contraction')):
 			if any(ch in cyrillic for ch in candidate):
 				if (candidate, pos) not in parsed_keys:
 					parsed_spellings.append((candidate, pos))

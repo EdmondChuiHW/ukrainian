@@ -157,6 +157,9 @@ class Usage:
 					return True
 		return False
 
+	def _definition_key(self, definition):
+		return strip_stress(definition)
+
 	def _usage_contains_form(self, usage):
 		return self._forms_contain_word(usage.get_forms(final_forms=True), self.word)
 
@@ -164,9 +167,7 @@ class Usage:
 		for d in list(self.alerted_definitions.keys()):
 			alert_info = self.alerted_definitions.get(d)
 			metadata = alert_info if isinstance(alert_info, dict) else None
-			relations = set()
-			if metadata:
-				relations.update(metadata.get('relations', []))
+			relations = set(metadata.get('relations', [])) if metadata else set()
 			if 'form_of' in relations:
 				resolved = False
 				for target in metadata.get('targets', []):
@@ -180,14 +181,17 @@ class Usage:
 					if resolved:
 						break
 				if resolved:
-					for d in list(self.alerted_definitions.keys()):
-						alert_info = self.alerted_definitions.get(d)
+					for dd in list(self.alerted_definitions.keys()):
+						alert_info = self.alerted_definitions.get(dd)
 						metadata = alert_info if isinstance(alert_info, dict) else None
 						relations = set(metadata.get('relations', [])) if metadata else set()
 						if 'form_of' in relations:
-							self.definitions.pop(d, None)
-							self.alerted_definitions.pop(d, None)
-							self.def_prefixes.pop(d, None)
+							self.definitions.pop(dd, None)
+							self.alerted_definitions.pop(dd, None)
+							self.def_prefixes.pop(dd, None)
+					continue
+				if relations == {'form_of'}:
+					self.alerted_definitions.pop(d, None)
 					continue
 				if relations - {'form_of'}:
 					continue
