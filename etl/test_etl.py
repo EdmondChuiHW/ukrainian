@@ -202,7 +202,7 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertEqual(results, [[None, None, None, None]])
 
         usage = word.usages['noun']
-        needs_inflection, new_usages = usage.add_inflection(results)
+        needs_inflection, new_usages = usage.add_inflection(results, source='test')
 
         self.assertFalse(usage.delete_me)
         self.assertFalse(needs_inflection)
@@ -222,7 +222,7 @@ class TestUkrainianETL(unittest.TestCase):
             'adj'
         ]]
 
-        needs_inflection, new_usages = usage.add_inflection(results)
+        needs_inflection, new_usages = usage.add_inflection(results, source='test')
 
         self.assertEqual(usage.get_forms(), {})
         self.assertEqual(usage.definitions, {'green (colour)': None})
@@ -242,7 +242,7 @@ class TestUkrainianETL(unittest.TestCase):
             'verb'
         ]]
 
-        needs_inflection, new_usages = usage.add_inflection(results)
+        needs_inflection, new_usages = usage.add_inflection(results, source='test')
 
         self.assertFalse(needs_inflection)
         self.assertFalse(usage.delete_me)
@@ -490,6 +490,123 @@ class TestUkrainianETL(unittest.TestCase):
         self.assertEqual(parsed['info']['animacy'], 'inanimate')
         self.assertEqual(parsed['info']['aspect'], None)
 
+    def test_parse_kaikki_entry_defaults_missing_forms_status(self):
+        import extract
+
+        entry = {
+            'word': 'тезаурус',
+            'pos': 'noun',
+            'lang': 'Ukrainian',
+            'senses': [
+                {'glosses': ['thesaurus']}
+            ]
+        }
+
+        parsed = extract._parse_kaikki_entry(entry)
+        self.assertEqual(parsed['forms_status'], 'missing')
+        self.assertIsNone(parsed['forms_source'])
+
+    def test_parse_kaikki_entry_detects_indeclinable_forms_status(self):
+        import extract
+
+        entry = {
+            'word': 'кінець',
+            'pos': 'noun',
+            'lang': 'Ukrainian',
+            'inflection_templates': [{'name': 'ndecl'}],
+            'senses': [
+                {'glosses': ['end']}
+            ]
+        }
+
+        parsed = extract._parse_kaikki_entry(entry)
+        self.assertEqual(parsed['forms_status'], 'indeclinable')
+        self.assertIsNone(parsed['forms_source'])
+
+    def test_parse_kaikki_entry_parsed_forms_set_wiktionary_source(self):
+        import extract
+
+        entry = {
+            'word': 'мати',
+            'pos': 'noun',
+            'lang': 'Ukrainian',
+            'forms': [
+                {'form': 'ма́ти', 'tags': ['canonical', 'feminine', 'person']},
+                {'form': 'ма́та', 'tags': ['genitive', 'singular'], 'source': 'declension'}
+            ],
+            'senses': [
+                {'glosses': ['mother']}
+            ]
+        }
+
+        parsed = extract._parse_kaikki_entry(entry)
+        self.assertEqual(parsed['forms_status'], 'available')
+        self.assertEqual(parsed['forms_source'], 'wiktionary')
+
+    def test_lookup_missing_forms_updates_usage_with_lcorp_source(self):
+        import extract, dictionary
+
+        word = dictionary.Word('мати')
+        word.add_definition('noun', 'mother')
+        usage = word.usages['noun']
+
+        cache_path = os.path.join(TEST_DATA_DIR, 'lcorp_missing_forms_cache.json')
+        if os.path.exists(cache_path):
+            os.remove(cache_path)
+
+        results = extract.lookup_missing_forms(word, use_cache=True)
+        self.assertIsInstance(results, list)
+        self.assertTrue(any(isinstance(res, tuple) or isinstance(res, list) for res in results))
+
+        needs_inflection, new_usages = usage.add_inflection(results, source='lcorp')
+        self.assertFalse(needs_inflection)
+        self.assertTrue(usage.get_forms())
+        self.assertEqual(usage.forms_status, 'available')
+        self.assertEqual(usage.forms_source, 'lcorp')
+
+        with open(cache_path, 'r', encoding='utf-8') as f:
+            cache = json.load(f)
+        self.assertIn('мати', cache)
+
+    def test_parse_lcorp_inflection_results_detects_indeclinable(self):
+        import extract
+        from types import SimpleNamespace
+
+        article_html = (
+            '<td id="ContentPlaceHolder1_article">'
+            '<span class="word_style">так</span>'
+            '<span class="gram_style">adverb</span>'
+            '<p>незмінювана словникова одиниця</p>'
+            '</td>'
+        )
+        results = extract._parse_lcorp_inflection_results(SimpleNamespace(word='так'), article_html)
+
+        self.assertEqual(results, [
+            ('так', {'gender': None, 'animacy': None, 'aspect': None}, {}, 'indeclinable')
+        ])
+
+    def test_add_inflection_detects_lcorp_indeclinable(self):
+        import dictionary
+
+        word = dictionary.Word('так')
+        word.add_definition('adverb', 'so')
+        usage = word.usages['adverb']
+
+        results = [[
+            'так',
+            {},
+            {},
+            'indeclinable'
+        ]]
+
+        needs_inflection, new_usages = usage.add_inflection(results, source='lcorp')
+
+        self.assertFalse(needs_inflection)
+        self.assertFalse(usage.delete_me)
+        self.assertEqual(usage.forms_status, 'indeclinable')
+        self.assertEqual(usage.forms_source, 'lcorp')
+        self.assertEqual(new_usages, [])
+
     def test_form_of_word_is_removed_after_merge(self):
         import extract, dictionary
 
@@ -519,7 +636,7 @@ class TestUkrainianETL(unittest.TestCase):
                 alert_value = d.get('metadata') if d.get('alert') else False
                 w.add_definition(p['pos'], d['definition'], alert=alert_value)
             if p['forms']:
-                w.add_forms(p['pos'], p['forms'], p['form_type'])
+                w.add_forms(p['pos'], p['forms'], p['form_type'], source='test')
             D.add_to_dictionary(w)
 
         for p in (parsed_entry if isinstance(parsed_entry, list) else [parsed_entry]):
@@ -528,7 +645,7 @@ class TestUkrainianETL(unittest.TestCase):
                 alert_value = d.get('metadata') if d.get('alert') else False
                 w.add_definition(p['pos'], d['definition'], alert=alert_value)
             if p['forms']:
-                w.add_forms(p['pos'], p['forms'], p['form_type'])
+                w.add_forms(p['pos'], p['forms'], p['form_type'], source='test')
             D.add_to_dictionary(w)
 
         D.clean_alerted_words()
@@ -580,11 +697,11 @@ class TestUkrainianETL(unittest.TestCase):
 
         accentless = dictionary.Word('Єльський')
         accentless.add_definition('adjective', 'test accentless')
-        accentless.add_forms('adjective', {'nom am': ['Єльський'], 'dat am': ['Єльському'], 'voc am': ['Єльський']}, 'adj')
+        accentless.add_forms('adjective', {'nom am': ['Єльський'], 'dat am': ['Єльському'], 'voc am': ['Єльський']}, 'adj', source='test')
 
         accented = dictionary.Word('Є́льський')
         accented.add_definition('adjective', 'test accented')
-        accented.add_forms('adjective', {'nom am': ['Є́льський'], 'dat am': ['Є́льському'], 'voc am': ['Є́льський']}, 'adj')
+        accented.add_forms('adjective', {'nom am': ['Є́льський'], 'dat am': ['Єльському'], 'voc am': ['Є́льський']}, 'adj', source='test')
 
         d.add_to_dictionary(accentless)
         d.add_to_dictionary(accented)
@@ -602,12 +719,11 @@ class TestUkrainianETL(unittest.TestCase):
 
         accented = dictionary.Word('Є́льський')
         accented.add_definition('adjective', 'test accented')
-        accented.add_forms('adjective', {'nom am': ['Є́льський'], 'dat am': ['Є́льському'], 'voc am': ['Є́льський']}, 'adj')
+        accented.add_forms('adjective', {'nom am': ['Є́льський'], 'dat am': ['Єльському'], 'voc am': ['Єльський']}, 'adj', source='test')
 
         accentless = dictionary.Word('Єльський')
         accentless.add_definition('adjective', 'test accentless')
-        accentless.add_forms('adjective', {'nom am': ['Єльський'], 'dat am': ['Єльському'], 'voc am': ['Єльський']}, 'adj')
-
+        accentless.add_forms('adjective', {'nom am': ['Єльський'], 'dat am': ['Єльському'], 'voc am': ['Єльський']}, 'adj', source='test')
         d.add_to_dictionary(accented)
         d.add_to_dictionary(accentless)
 
@@ -762,7 +878,7 @@ class TestUkrainianETL(unittest.TestCase):
 
         base = dictionary.Word('скасува́ння')
         base.add_definition('noun', 'cancellation')
-        base.add_forms('noun', {'loc sg': ['скасува́нні']}, 'noun')
+        base.add_forms('noun', {'loc sg': ['скасува́нні']}, 'noun', source='test')
 
         alerted_usage = dictionary.Usage('скасува́нні', 'noun')
         alerted_metadata = {

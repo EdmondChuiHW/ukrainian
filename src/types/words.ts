@@ -15,6 +15,8 @@ export interface GrammarInfo {
   aspect: string | null;
 }
 
+export type FormStatus = 'missing' | 'indeclinable' | 'available';
+
 export interface RawDictionaryEntry {
   word: string;
   pos: string;
@@ -24,6 +26,8 @@ export interface RawDictionaryEntry {
   def_prefixes?: (string[] | null)[];
   def_synonyms?: Array<Array<number | string>>;
   forms?: DictionaryForms;
+  forms_status: FormStatus;
+  forms_source?: string;
   variants?: string[];
   freq?: number;
   index?: number;

@@ -2,10 +2,19 @@ import os
 import re
 import json
 import multiprocessing
+import requests
+from datetime import datetime
+from bs4 import BeautifulSoup
 from collections import defaultdict
 from copy import deepcopy
 from functools import lru_cache
 from typing import Optional
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
 
 from dictionary import Word, cyrillic
 from helpers import strip_stress
@@ -201,13 +210,483 @@ _ETL_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get('DATA_DIR', 'cache')
 os.makedirs(DATA_DIR, exist_ok=True)
 
+MISSING_FORMS_CACHE_FILE = os.path.join(DATA_DIR, 'lcorp_missing_forms_cache.json')
+L_CORP_ERROR_LOG_FILE = os.path.join(DATA_DIR, 'lcorp_missing_forms_errors.json')
+
 # Caches are deprecated in offline mode
 wiktionary_cache = {}
 inflection_cache = {}
 
+# LCoRP error tracking
+_lcorp_error_log = []
+
 # Lazy-loaded offline database
 _wiktionary_database = None
 _wiktionary_index = None
+
+
+def _load_missing_forms_cache():
+    try:
+        with open(MISSING_FORMS_CACHE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_missing_forms_cache(cache):
+    try:
+        with open(MISSING_FORMS_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def save_lcorp_error_log():
+    try:
+        categories = defaultdict(int)
+        for entry in _lcorp_error_log:
+            categories[entry.get('category') or 'unknown'] += 1
+        snapshot = {
+            'summary': {
+                'total_failures': len(_lcorp_error_log),
+                'categories': dict(categories),
+            },
+            'errors': list(_lcorp_error_log),
+        }
+        with open(L_CORP_ERROR_LOG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(snapshot, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def _record_lcorp_error(word, category, message, request_type=None, status_code=None, url=None, details=None):
+    entry = {
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'word': word,
+        'category': category,
+        'message': message,
+        'request_type': request_type,
+        'status_code': status_code,
+        'url': url,
+        'details': details,
+    }
+    _lcorp_error_log.append(entry)
+
+
+def get_lcorp_error_summary():
+    categories = defaultdict(int)
+    for entry in _lcorp_error_log:
+        categories[entry.get('category') or 'unknown'] += 1
+    return {
+        'total_failures': len(_lcorp_error_log),
+        'categories': dict(categories),
+    }
+
+
+def has_lcorp_errors():
+    return get_lcorp_error_summary()['total_failures'] > 0
+
+
+def print_lcorp_error_summary():
+    summary = get_lcorp_error_summary()
+    if summary['total_failures'] == 0:
+        return
+    print('LCoRP missing forms error summary:')
+    print(f"  Total failures: {summary['total_failures']}")
+    for category, count in sorted(summary['categories'].items()):
+        print(f"  {category}: {count}")
+    print(f"  Details file: {L_CORP_ERROR_LOG_FILE}")
+
+_LCORP_URL = 'https://lcorp.ulif.org.ua/dictua/dictua.aspx'
+_lcorp_state = None
+_LCORP_INDECLINABLE_TEXT = 'незмінювана словникова одиниця'
+_LCORP_SESSION = requests.Session()
+
+
+def _lcorp_fetch_page(url, data=None, headers=None, timeout=30):
+    headers = headers or {}
+    headers.setdefault('User-Agent', 'Mozilla/5.0 (compatible; UkrainianETL/1.0)')
+    request_type = 'GET' if data is None else 'POST'
+    try:
+        if data is None:
+            response = _LCORP_SESSION.get(url, headers=headers, timeout=timeout)
+        else:
+            response = _LCORP_SESSION.post(url, data=data, headers=headers, timeout=timeout)
+        response.encoding = response.encoding or 'utf-8'
+        response.raise_for_status()
+        return response.text
+    except requests.exceptions.HTTPError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        category = 'rate limited' if status_code == 429 else 'server failure' if status_code and 500 <= status_code < 600 else 'network failure'
+        _record_lcorp_error(
+            word=None,
+            category=category,
+            message=str(exc),
+            request_type=request_type,
+            status_code=status_code,
+            url=url,
+            details={'headers': headers, 'timeout': timeout},
+        )
+        raise
+    except requests.exceptions.RequestException as exc:
+        _record_lcorp_error(
+            word=None,
+            category='network failure',
+            message=str(exc),
+            request_type=request_type,
+            status_code=getattr(exc.response, 'status_code', None) if hasattr(exc, 'response') else None,
+            url=url,
+            details={'headers': headers, 'timeout': timeout},
+        )
+        raise
+
+
+def _lcorp_extract_hidden_input(html, name):
+    soup = BeautifulSoup(html, 'html.parser')
+    element = soup.find('input', {'id': name})
+    return element['value'] if element and element.has_attr('value') else ''
+
+def _lcorp_get_state():
+    global _lcorp_state
+    if _lcorp_state is not None:
+        return _lcorp_state
+    html = _lcorp_fetch_page(_LCORP_URL)
+    _lcorp_state = {
+        'viewstate': _lcorp_extract_hidden_input(html, '__VIEWSTATE'),
+        'viewstategenerator': _lcorp_extract_hidden_input(html, '__VIEWSTATEGENERATOR'),
+        'eventvalidation': _lcorp_extract_hidden_input(html, '__EVENTVALIDATION'),
+    }
+    return _lcorp_state
+
+
+def _extract_lcorp_tag_text(html, class_name):
+    soup = BeautifulSoup(html, 'html.parser')
+    element = soup.find(class_=class_name)
+    return element.get_text(strip=True) if element else None
+
+
+def _extract_lcorp_article(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    article_td = soup.find('td', {'id': 'ContentPlaceHolder1_article'})
+    return str(article_td) if article_td else ''
+
+
+def _parse_lcorp_rows(article_html):
+    soup = BeautifulSoup(article_html, 'html.parser')
+    rows = []
+    for tr in soup.find_all('tr'):
+        cells = [td.get_text(strip=True) for td in tr.find_all('td')]
+        if cells:
+            rows.append(cells)
+    return rows
+
+
+def _parse_lcorp_word_info(text):
+    text = text or ''
+    tags = [x.strip() for x in re.split(r'[,;\s]+', text) if x.strip()]
+    grammar = {
+        'gender': None,
+        'animacy': None,
+        'aspect': None,
+    }
+    for tag in tags:
+        if tag in ('чоловічий', 'чоловічого', 'чол.'): 
+            grammar['gender'] = 'male'
+        elif tag in ('жіночий', 'жіночого', 'жін.'): 
+            grammar['gender'] = 'female'
+        elif tag in ('середній', 'середнього', 'с.'): 
+            grammar['gender'] = 'neuter'
+        elif tag in ('неодушевлений', 'неодушевленого'): 
+            grammar['animacy'] = 'inanimate'
+        elif tag in ('одушевлений', 'одушевленого'): 
+            grammar['animacy'] = 'animate'
+        elif tag in ('доконаного', 'доконаний'): 
+            grammar['aspect'] = 'perfective'
+        elif tag in ('недоконаного', 'недоконаний'): 
+            grammar['aspect'] = 'imperfective'
+    return grammar
+
+
+def _parse_lcorp_inflection_results(word, article_html):
+    found_word = _extract_lcorp_tag_text(article_html, 'word_style')
+    word_info = _extract_lcorp_tag_text(article_html, 'gram_style')
+    rows = _parse_lcorp_rows(article_html)
+
+    form_type = None
+    forms = None
+    indeclinable = _LCORP_INDECLINABLE_TEXT in article_html
+    if rows:
+        if rows[0][0] == 'Інфінітив':
+            form_type = 'verb'
+            forms = _parse_lcorp_verb_rows(rows)
+        elif len(rows) > 1 and rows[1][0] == 'називний':
+            form_type = 'noun'
+            forms = _parse_lcorp_noun_rows(rows)
+        elif len(rows) > 1 and rows[1][0] == 'чол. р.':
+            form_type = 'adj'
+            forms = _parse_lcorp_adjective_rows(rows)
+        elif rows[0] and rows[0][0] == 'Я':
+            form_type = 'noun'
+            forms = _parse_lcorp_pronoun(word.word)
+    if forms is None:
+        forms = {}
+    if indeclinable:
+        form_type = 'indeclinable'
+    return [(found_word, _parse_lcorp_word_info(word_info), forms, form_type)]
+
+
+def _parse_lcorp_verb_rows(rows):
+    forms = {}
+    last_seen_type = None
+    current_tense = None
+    for row in rows:
+        if row[0] == 'Інфінітив':
+            if len(row) > 1:
+                forms['inf'] = row[1]
+        if 'Наказовий' in row[0]:
+            current_tense = 'imp'
+        if 'МАЙБУТНІЙ' in row[0]:
+            current_tense = 'fut'
+        if 'ТЕПЕРІШНІЙ' in row[0]:
+            current_tense = 'pres'
+        if 'МИНУЛИЙ' in row[0]:
+            current_tense = 'past'
+        if row[0] == '1 особа':
+            if current_tense == 'imp':
+                if len(row) > 2:
+                    forms['imp 1p'] = row[2]
+            else:
+                if len(row) > 1:
+                    forms[f'{current_tense} 1s'] = row[1]
+                if len(row) > 2:
+                    forms[f'{current_tense} 1p'] = row[2]
+        if row[0] == '2 особа':
+            if len(row) > 1:
+                forms[f'{current_tense} 2s'] = row[1]
+            if len(row) > 2:
+                forms[f'{current_tense} 2p'] = row[2]
+        if row[0] == '3 особа':
+            if len(row) > 1:
+                forms[f'{current_tense} 3s'] = row[1]
+            if len(row) > 2:
+                forms[f'{current_tense} 3p'] = row[2]
+        if 'чол.' in row[0]:
+            if len(row) > 1:
+                forms['past ms'] = row[1]
+            if len(row) > 2:
+                forms['past p'] = row[2]
+        if 'жін.' in row[0] and len(row) > 1:
+            forms['past fs'] = row[1]
+        if 'сер.' in row[0] and len(row) > 1:
+            forms['past ns'] = row[1]
+        if row[0] in ('Активний дієприкметник', 'Пасивний дієприкметник', 'Дієприслівник', 'Безособова форма'):
+            last_seen_type = row[0]
+        elif last_seen_type is not None:
+            form_type = {
+                'Активний дієприкметник': 'act pp',
+                'Пасивний дієприкметник': 'pas pp',
+                'Дієприслівник': 'adv pp',
+                'Безособова форма': 'imp pp',
+            }.get(last_seen_type)
+            if form_type and len(row) > 0:
+                forms[form_type] = row[0]
+    for form_id in list(forms.keys()):
+        if forms[form_id] == '':
+            del forms[form_id]
+    return forms
+
+
+def _parse_lcorp_noun_rows(rows):
+    forms = {}
+    for row in rows:
+        case = None
+        if row[0] == 'називний':
+            case = 'nom'
+        if row[0] == 'родовий':
+            case = 'gen'
+        if row[0] == 'давальний':
+            case = 'dat'
+        if row[0] == 'знахідний':
+            case = 'acc'
+        if row[0] == 'орудний':
+            case = 'ins'
+        if row[0] == 'місцевий':
+            case = 'loc'
+        if row[0] == 'кличний':
+            case = 'voc'
+        if case is not None:
+            if len(row) > 2:
+                forms[f'{case} ns'] = row[1]
+                forms[f'{case} np'] = row[2]
+            elif len(row) > 1:
+                forms[f'{case} n'] = row[1]
+    return forms
+
+
+def _parse_lcorp_adjective_rows(rows):
+    forms = {}
+    for row in rows:
+        case = None
+        if row[0] == 'називний':
+            case = 'nom'
+        if row[0] == 'родовий':
+            case = 'gen'
+        if row[0] == 'давальний':
+            case = 'dat'
+        if row[0] == 'знахідний':
+            case = 'acc'
+        if row[0] == 'орудний':
+            case = 'ins'
+        if row[0] == 'місцевий':
+            case = 'loc'
+        if case is not None and len(row) > 1:
+            forms[f'{case} am'] = row[1]
+            if len(row) > 2:
+                forms[f'{case} an'] = row[2]
+    return forms
+
+
+def _parse_lcorp_pronoun(word):
+    nom = ['я', 'ти', 'він', 'воно́', 'вона́', 'ми', 'ви', 'вони́']
+    gen = ['мене́', 'тебе́', 'його́, ньо́го', 'його́, ньо́го', 'її́, не́ї', 'нас', 'вас', 'їх, них*']
+    dat = ['мені́', 'тобі́', 'йому́', 'йому́', 'їй', 'нам', 'вам', 'їм']
+    acc = ['мене́', 'тебе́', 'його́, ньо́го', 'його́, ньо́го', 'її́, не́ї', 'нас', 'вас', 'їх, них*']
+    ins = ['мно́ю', 'тобо́ю', 'ним', 'ним', 'не́ю', 'на́ми', 'ва́ми', 'ни́ми']
+    loc = ['мені́', 'тобі́', 'ньо́му, нім', 'ньо́му, нім', 'ній', 'нас', 'вас', 'них']
+    index = {e.replace('́', ''): i for i, e in enumerate(nom)}
+    word = word.replace('́', '')
+    if word not in index:
+        return None
+    forms = defaultdict(lambda: [])
+    forms['nom n'] += nom[index[word]].split(', ')
+    forms['gen n'] += gen[index[word]].split(', ')
+    forms['dat n'] += dat[index[word]].split(', ')
+    forms['acc n'] += acc[index[word]].split(', ')
+    forms['ins n'] += ins[index[word]].split(', ')
+    forms['loc n'] += loc[index[word]].split(', ')
+    return dict(forms)
+
+
+def _lcorp_search_candidates(word):
+    try:
+        state = _lcorp_get_state()
+    except Exception as exc:
+        _record_lcorp_error(
+            word=word,
+            category='parsing failure',
+            message=f'failed to retrieve or parse LCoRP state: {exc}',
+            request_type='GET',
+            url=_LCORP_URL,
+        )
+        return [[None, None, None, None]]
+
+    data = {
+        'ctl00$ContentPlaceHolder1$ScriptManager1': 'ctl00$ContentPlaceHolder1$UpdText|ctl00$ContentPlaceHolder1$search',
+        '__EVENTTARGET': '',
+        '__EVENTARGUMENT': '',
+        '__VIEWSTATE': state['viewstate'],
+        '__VIEWSTATEGENERATOR': state['viewstategenerator'],
+        '__EVENTVALIDATION': state['eventvalidation'],
+        'ctl00$ContentPlaceHolder1$tsearch': word,
+        'ctl00$ContentPlaceHolder1$search.x': '0',
+        'ctl00$ContentPlaceHolder1$search.y': '0',
+    }
+    try:
+        html = _lcorp_fetch_page(_LCORP_URL, data=data, headers={
+            'Origin': 'https://lcorp.ulif.org.ua',
+            'Referer': _LCORP_URL,
+        })
+    except requests.exceptions.RequestException:
+        return [[None, None, None, None]]
+
+    soup = BeautifulSoup(html, 'html.parser')
+    table = soup.find('table', {'id': 'DictMainTab'})
+    if not table:
+        _record_lcorp_error(
+            word=word,
+            category='word not found',
+            message='no candidate search results table found',
+            request_type='POST',
+            url=_LCORP_URL,
+        )
+        return [[None, None, None, None]]
+    anchor_texts = [a.get_text(strip=True) for a in table.find_all('a')]
+    normalized_target = strip_stress(word)
+    for index, anchor in enumerate(anchor_texts):
+        if strip_stress(anchor) == normalized_target:
+            return _lcorp_fetch_candidate_results(word, index, state)
+
+    _record_lcorp_error(
+        word=word,
+        category='word not found',
+        message='target word not found in LCoRP search results',
+        request_type='POST',
+        url=_LCORP_URL,
+        details={'anchors': anchor_texts[:20]},
+    )
+    return [[None, None, None, None]]
+
+
+def _lcorp_fetch_candidate_results(word, index, state):
+    data = {
+        'ctl00$ContentPlaceHolder1$ScriptManager1': 'ctl00$ContentPlaceHolder1$UpdText|ctl00$ContentPlaceHolder1$dgv',
+        '__EVENTTARGET': 'ctl00$ContentPlaceHolder1$dgv',
+        '__EVENTARGUMENT': f'Select${index}',
+        '__VIEWSTATE': state['viewstate'],
+        '__VIEWSTATEGENERATOR': state['viewstategenerator'],
+        '__EVENTVALIDATION': state['eventvalidation'],
+        'ctl00$ContentPlaceHolder1$tsearch': word,
+    }
+    try:
+        html = _lcorp_fetch_page(_LCORP_URL, data=data, headers={
+            'Origin': 'https://lcorp.ulif.org.ua',
+            'Referer': _LCORP_URL,
+        })
+    except requests.exceptions.RequestException:
+        return [[None, None, None, None]]
+
+    article = _extract_lcorp_article(html)
+    if not article:
+        _record_lcorp_error(
+            word=word,
+            category='parsing failure',
+            message='could not extract article HTML from candidate page',
+            request_type='POST',
+            url=_LCORP_URL,
+        )
+        return [[None, None, None, None]]
+    return _parse_lcorp_inflection_results(word, article)
+
+
+def _fetch_lcorp_inflection(word, use_cache=True):
+    try:
+        return _lcorp_search_candidates(word.word)
+    except Exception as exc:
+        _record_lcorp_error(
+            word=word.word if getattr(word, 'word', None) else None,
+            category='unexpected failure',
+            message=f'exception fetching LCoRP inflection: {exc}',
+            request_type='LCoRP lookup',
+            url=_LCORP_URL,
+        )
+        return None
+
+
+def lookup_missing_forms(word, use_cache=True):
+    cache = _load_missing_forms_cache() if use_cache else {}
+    key = strip_stress(word.word)
+
+    if use_cache and key in cache:
+        return cache[key]
+
+    results = _fetch_lcorp_inflection(word, use_cache=use_cache)
+    if not results or all(r[0] is None for r in results):
+        results = [[None, None, None, None]]
+    if use_cache:
+        cache[key] = results
+        _save_missing_forms_cache(cache)
+    return results
+
 
 def _build_wiktionary_index(words):
 	index = {
@@ -848,8 +1327,10 @@ def _parse_kaikki_entry(entry):
 			'synonyms': entry_synonyms or None,
 			'forms': entry_forms,
 			'form_type': form_type,
-			'info': word_info,
-			'aspect_candidates': aspect_candidates if aspect_candidates else None,
+			'info': word_info if any(word_info.values()) else None,
+			'aspect_candidates': aspect_candidates,
+			'forms_status': 'available' if entry_forms else ('indeclinable' if any('ndecl' in name for name in template_names) else 'missing'),
+			'forms_source': 'wiktionary' if entry_forms else None,
 		})
 
 	for relation_source in ('related', 'derived'):
@@ -988,7 +1469,8 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 
 	parsed_entries = []
 	with multiprocessing.Pool(processes=num_cores) as pool:
-		for res in pool.imap(_parse_chunk_worker, _iter_jsonl_chunks(kaikki_path, chunk_size), chunksize=1):
+		for res in tqdm(pool.imap(_parse_chunk_worker, _iter_jsonl_chunks(kaikki_path, chunk_size), chunksize=1),
+			desc='parsing wiktionary file', unit='chunk', disable=not os.isatty(1)):
 			if isinstance(res, list):
 				parsed_entries.extend(res)
 			elif res:
@@ -1007,7 +1489,7 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 
 	words_map = {}
 	aspect_pairs = set()
-	for pe in ukrainian_entries:
+	for pe in tqdm(ukrainian_entries, desc='merging ukrainian entries', unit='entry', disable=not os.isatty(1)):
 		word_spelling = pe['word']
 		pos = pe['pos']
 		if not word_spelling:
@@ -1042,7 +1524,7 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 		if pe.get('info'):
 			w.add_info(pos, pe['info'])
 		if pe.get('form_type'):
-			w.add_forms(pos, pe.get('forms') or {}, pe['form_type'])
+			w.add_forms(pos, pe.get('forms') or {}, pe['form_type'], source='wiktionary')
 
 	for pe in reverse_entries:
 		word_spelling = pe['word']
@@ -1076,6 +1558,11 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 					reverse_translation=True,
 					reverse_translation_source_word=reverse_word,
 			)
+		if pe.get('forms_status') and pos in w.usages:
+			usage = w.usages[pos]
+			usage.forms_status = pe['forms_status']
+			if pe.get('forms_source'):
+				usage.forms_source = pe['forms_source']
 		if pe.get('info'):
 			w.add_info(pos, pe['info'])
 

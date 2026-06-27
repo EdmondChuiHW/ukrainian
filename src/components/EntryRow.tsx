@@ -295,7 +295,12 @@ export const EntryRow: React.FC<EntryRowProps> = ({
       </div>
 
       <div className="col entry-forms-column">
-        <FormsTable forms={entry.forms} query={query} />
+        <FormsTable
+          forms={entry.forms}
+          forms_status={entry.forms_status}
+          forms_source={entry.forms_source}
+          query={query}
+        />
       </div>
 
       <p className="entry-link">

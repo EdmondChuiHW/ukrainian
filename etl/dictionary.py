@@ -1,3 +1,4 @@
+import concurrent.futures
 import os
 import json
 import re
@@ -9,6 +10,12 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from helpers import strip_stress
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(iterable, *args, **kwargs):
+        return iterable
 
 DATA_DIR = os.environ.get('DATA_DIR', 'cache')
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -116,6 +123,8 @@ class Usage:
 		self.aspect = None  # 'imperfective', 'perfective', or None
 		self.reverse_translation = False
 		self.reverse_translation_source_word = None
+		self.forms_status = 'missing'
+		self.forms_source = None
 		self.delete_me = False
 
 	def add_definitions(self, definitions):
@@ -246,6 +255,11 @@ class Usage:
 		"""Check if inflection form_type is applicable to this usage's POS."""
 		return self.pos == form_type
 
+	def _word_matches(self, found_word):
+		return found_word and (
+			self.word == found_word or strip_stress(self.word) == strip_stress(found_word)
+		)
+
 
 	def get_info(self):
 		"""Formatted grammar info string for display."""
@@ -258,12 +272,15 @@ class Usage:
 			parts.append(self.aspect)
 		return ', '.join(parts) if parts else ''
 
-	def add_forms(self, forms, form_type):
+	def add_forms(self, forms, form_type, *, source):
 		if form_type in self.forms:
 			self.forms[form_type].add_forms(forms)
 		else:
 			forms = Forms(forms, form_type)
 			self.forms[form_type] = forms
+		if self.get_forms() and self.forms_status != 'indeclinable':
+			self.forms_status = 'available'
+			self.forms_source = source
 
 	def add_synonyms(self, synonyms):
 		for syn in synonyms or []:
@@ -273,7 +290,7 @@ class Usage:
 	def add_frequency(self, frequency):
 		self.frequency = frequency
 
-	def add_inflection(self, results, force=False):
+	def add_inflection(self, results, *, source, force=False):
 
 		def get_inflection_positions(word):
 			word = word + '|'  # end of word marker, irrelevant
@@ -290,15 +307,43 @@ class Usage:
 			self.delete_me = False
 			return False, []
 		for found_word, word_info, forms, form_type in results:
+			if form_type == 'indeclinable' and found_word and self._word_matches(found_word):
+				if word_info:
+					self.add_info(word_info)
+				self.forms_status = 'indeclinable'
+				if source is not None:
+					self.forms_source = source
+				self.delete_me = False
+				return False, []
 			if found_word:
-				if self.word == found_word: # perfect match!
+				if self.word == found_word:
 					if self._word_info_matches_pos(word_info, form_type):
 						self.add_info(word_info)
-						self.add_forms(forms, form_type)
+						self.add_forms(forms, form_type, source=source)
 						added_flag = True
 						self.delete_me = False
+				elif self._word_info_matches_pos(word_info, form_type) and strip_stress(self.word) == strip_stress(found_word):
+					if self.pos == 'verb' and form_type == 'verb' and isinstance(forms, dict) and set(forms.keys()) == {'inf'}:
+						this_inflection = get_inflection_positions(self.word)
+						found_inflection = get_inflection_positions(found_word)
+						if len([x for x in this_inflection if x not in found_inflection]) == 0:
+							new_usage = Usage(found_word, self.pos)
+							new_usage.definitions = deepcopy(self.definitions)
+							new_usage.alerted_definitions = deepcopy(self.alerted_definitions)
+							new_usage.def_prefixes = deepcopy(self.def_prefixes)
+							new_usage.add_info(word_info)
+							new_usage.add_forms(forms, form_type, source=source)
+							new_usages.append(new_usage)
+							added_flag = True
+							self.delete_me = False
+					else:
+						if self._word_info_matches_pos(word_info, form_type):
+							self.add_info(word_info)
+							self.add_forms(forms, form_type, source=source)
+							added_flag = True
+							self.delete_me = False
 				elif self._word_info_matches_pos(word_info, form_type):
-					this_inflection = get_inflection_positions(self.word) 
+					this_inflection = get_inflection_positions(self.word)
 					found_inflection = get_inflection_positions(found_word)
 					if len([x for x in this_inflection if x not in found_inflection]) == 0:  # stress could be elsewhere
 						new_usage = Usage(found_word, self.pos)
@@ -306,7 +351,7 @@ class Usage:
 						new_usage.alerted_definitions = deepcopy(self.alerted_definitions)
 						new_usage.def_prefixes = deepcopy(self.def_prefixes)
 						new_usage.add_info(word_info)
-						new_usage.add_forms(forms, form_type)
+						new_usage.add_forms(forms, form_type, source=source)
 						new_usages.append(new_usage)
 						added_flag = True
 						self.delete_me = False
@@ -318,11 +363,11 @@ class Usage:
 						new_usage.alerted_definitions = deepcopy(self.alerted_definitions)
 						new_usage.def_prefixes = deepcopy(self.def_prefixes)
 						new_usage.add_info(word_info)
-						new_usage.add_forms(forms, form_type)
+						new_usage.add_forms(forms, form_type, source=source)
 						new_usages.append(new_usage)
 					else:
 						self.add_info(word_info)
-						self.add_forms(forms, form_type)
+						self.add_forms(forms, form_type, source=source)
 						self.delete_me = False
 		if self.pos not in ('noun', 'verb', 'adjective'):
 			self.delete_me = False
@@ -490,7 +535,9 @@ class Usage:
 				'animacy': self.animacy,
 				'aspect': self.aspect,
 			},
-			'forms': self.get_forms(final_forms)
+			'forms': self.get_forms(final_forms),
+			'forms_status': self.forms_status,
+			'forms_source': self.forms_source,
 		}
 		if self.synonyms:
 			result['synonyms'] = self.synonyms
@@ -665,22 +712,22 @@ class Word:
 		if pos in self.usages:
 			self.usages[pos].add_info(word_info)
 
-	def add_forms(self, pos, forms, form_type):
+	def add_forms(self, pos, forms, form_type, *, source):
 		pos = Word.normalize_pos(pos)
 		if pos in self.usages:
-			self.usages[pos].add_forms(forms, form_type)
+			self.usages[pos].add_forms(forms, form_type, source=source)
 
-	def add_inflections(self, results):
+	def add_inflections(self, results, source):
 		needs_flag = True
 		new_usages = []
 		for usage in self.usages.values():
-			this_needs, nu = usage.add_inflection(results)
+			this_needs, nu = usage.add_inflection(results, source=source)
 			if not this_needs:
 				needs_flag = False
 			new_usages += nu
 		if needs_flag:
 			for usage in self.usages.values():
-				_, nu = usage.add_inflection(results, force=True)
+				_, nu = usage.add_inflection(results, source=source, force=True)
 				new_usages += nu
 		return new_usages
 
@@ -774,15 +821,48 @@ class Dictionary:
 			for w in to_add:
 				self._add_word_to_dictionary(w)
 
-	def add_wiktionary_words(self):
+	def _fill_missing_forms(self):
+		import extract
+		to_fetch = []
+		for word in self.dict.values():
+			for usage in word.usages.values():
+				if usage.forms_status == 'indeclinable':
+					continue
+				if usage.forms_status != 'missing' or usage.get_forms():
+					continue
+				to_fetch.append((word, usage))
+
+		if not to_fetch:
+			return
+
+		def fetch_missing(pair):
+			word, usage = pair
+			results = extract.lookup_missing_forms(word, use_cache=True)
+			return word, usage, results
+
+		with concurrent.futures.ThreadPoolExecutor() as executor:
+			print(f"Using {executor._max_workers} workers to fetch missing forms")
+			fetched_results = list(tqdm(executor.map(fetch_missing, to_fetch), desc='fetching missing forms', unit='word', total=len(to_fetch), disable=not os.isatty(1)))
+
+		for word, usage, results in fetched_results:
+			_, new_usages = usage.add_inflection(results, source='lcorp')
+			for new_usage in new_usages:
+				if new_usage.pos not in word.usages:
+					word.usages[new_usage.pos] = new_usage
+
+	def add_wiktionary_words(self, fetch_missing_forms=True):
 		import extract
 		print("adding wiktionary words")
 		print('parsing wiktionary data from jsonl')
 		try:
 			words, candidate_pairs = extract.load_wiktionary_jsonl(self.kaikki_path, return_aspect_candidates=True)
 			self.verb_aspect_candidate_pairs = candidate_pairs
-			for w in words:
+			for w in tqdm(words, desc='adding wiktionary words', unit='word', disable=not os.isatty(1)):
 				self.add_to_dictionary(w)
+			if fetch_missing_forms:
+				self._fill_missing_forms()
+				extract.save_lcorp_error_log()
+				extract.print_lcorp_error_summary()
 		except Exception as e:
 			raise e
 		print('done parsing wiktionary data')
@@ -792,11 +872,11 @@ class Dictionary:
 		self.garbage_collect()
 
 	def clean_alerted_words(self):
-		for _, w in self.dict.items():
+		for _, w in tqdm(list(self.dict.items()), desc='cleaning alerted words', unit='word', disable=not os.isatty(1)):
 			w.clean_alerted_words(self)
 
 	def garbage_collect(self):
-		for w in list(self.dict.keys()):
+		for w in tqdm(list(self.dict.keys()), desc='garbage collecting', unit='word', disable=not os.isatty(1)):
 			word = self.dict[w]
 			deleted = word.garbage_collect()
 			self.deletions.extend(deleted)
@@ -813,7 +893,7 @@ class Dictionary:
 	def add_frequencies(self):
 		import extract
 		frequencies = extract.get_frequency_list(self.frequency_csv_path)
-		for _, word in self.dict.items():
+		for _, word in tqdm(self.dict.items(), desc='adding frequencies', unit='word', disable=not os.isatty(1)):
 			if word.get_word_no_accent() in frequencies:
 				word.add_frequencies(frequencies[word.get_word_no_accent()])
 			else:
@@ -1045,3 +1125,5 @@ class Dictionary:
 				f.write(
 					json.dumps(data, ensure_ascii=False)
 				)
+		
+		return data

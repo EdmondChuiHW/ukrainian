@@ -58,7 +58,7 @@ def report_debug_words(dictionary, debug_words: Optional[list[str]] = None, verb
             print("  No deletions")
 
 
-def main(debug_words: Optional[list[str]] = None, verbose: bool = False) -> None:
+def main(debug_words: Optional[list[str]] = None, verbose: bool = False, fetch_missing_forms: bool = True) -> None:
     if Path.cwd().name != 'etl':
         raise RuntimeError('Run this from the etl directory: cd etl')
 
@@ -84,14 +84,15 @@ def main(debug_words: Optional[list[str]] = None, verbose: bool = False) -> None
         frequency_csv_path=frequency_csv_path,
         deletion_log_path=deletion_log_path,
     )
-    d.add_wiktionary_words()
+    d.add_wiktionary_words(fetch_missing_forms=fetch_missing_forms)
     d.add_verb_aspect_counterparts(
         known_pairs_path=source_dir / 'verb_aspect_known_pairs.json',
     )
 
     d.dump(output_dir / 'dictionary_data.json', indent=4, final_form=True)
     d.make_index(output_dir / 'index.json', output_dir / 'word_dict.json', indent=4)
-    d.dump(output_dir / 'words.json', final_form=True)
+    final_data = d.dump(output_dir / 'words.json', final_form=True)
+    print(f"{len(final_data)} entries written to {output_dir / 'dictionary_data.json'}")
     d.write_deletion_log()
     report_debug_words(d, debug_words=debug_words, verbose=verbose)
 
@@ -102,6 +103,10 @@ if __name__ == '__main__':
         help='Word(s) to inspect after pipeline completion')
     parser.add_argument('--debug-word', action='append', default=None,
         help='Word to inspect after pipeline completion (repeatable)')
+    parser.add_argument('--fetch-missing-forms', action='store_true', default=True,
+        help='Enable lookup of missing forms using cached missing-form data')
+    parser.add_argument('--no-fetch-missing-forms', action='store_false', dest='fetch_missing_forms',
+        help='Disable lookup of missing forms')
     parser.add_argument('--verbose', action='store_true',
         help='Enable verbose debug reporting')
     args = parser.parse_args()
@@ -112,4 +117,4 @@ if __name__ == '__main__':
         debug_words.extend(args.debug_word)
     if not debug_words:
         debug_words = None
-    main(debug_words=debug_words, verbose=args.verbose)
+    main(debug_words=debug_words, verbose=args.verbose, fetch_missing_forms=args.fetch_missing_forms)
