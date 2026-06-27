@@ -545,6 +545,7 @@ class TestUkrainianETL(unittest.TestCase):
 
     def test_lookup_missing_forms_updates_usage_with_lcorp_source(self):
         import extract, dictionary
+        from unittest.mock import patch
 
         word = dictionary.Word('мати')
         word.add_definition('noun', 'mother')
@@ -554,7 +555,21 @@ class TestUkrainianETL(unittest.TestCase):
         if os.path.exists(cache_path):
             os.remove(cache_path)
 
-        results = extract.lookup_missing_forms(word, use_cache=True)
+        # Mock _lcorp_search_candidates to return noun forms for 'мати'
+        mock_results = [
+            ('мати', {'gender': 'female', 'animacy': 'animate'}, {
+                'nom ns': 'ма́ти',
+                'gen ns': 'ма́терi',
+                'dat ns': 'ма́терi',
+                'acc ns': 'ма́терi',
+                'ins ns': 'ма́терi',
+                'loc ns': 'ма́терi',
+                'voc ns': 'ма́терi',
+            }, 'noun'),
+        ]
+        with patch.object(extract, '_lcorp_search_candidates', return_value=mock_results):
+            results = extract.lookup_missing_forms(word, use_cache=True)
+
         self.assertIsInstance(results, list)
         self.assertTrue(any(isinstance(res, tuple) or isinstance(res, list) for res in results))
 
