@@ -513,9 +513,8 @@ class TestUkrainianETL(unittest.TestCase):
             'word': 'кінець',
             'pos': 'noun',
             'lang': 'Ukrainian',
-            'inflection_templates': [{'name': 'ndecl'}],
             'senses': [
-                {'glosses': ['end']}
+                {'glosses': ['end'], 'tags': ['indeclinable']}
             ]
         }
 
@@ -547,41 +546,61 @@ class TestUkrainianETL(unittest.TestCase):
         import extract, dictionary
         from unittest.mock import patch
 
-        word = dictionary.Word('мати')
-        word.add_definition('noun', 'mother')
-        usage = word.usages['noun']
-
-        cache_path = os.path.join(TEST_DATA_DIR, 'lcorp_missing_forms_cache.json')
-        if os.path.exists(cache_path):
-            os.remove(cache_path)
-
-        # Mock _lcorp_search_candidates to return noun forms for 'мати'
-        mock_results = [
-            ('мати', {'gender': 'female', 'animacy': 'animate'}, {
-                'nom ns': 'ма́ти',
-                'gen ns': 'ма́терi',
-                'dat ns': 'ма́терi',
-                'acc ns': 'ма́терi',
-                'ins ns': 'ма́терi',
-                'loc ns': 'ма́терi',
-                'voc ns': 'ма́терi',
+        # Mock _lcorp_search_candidates to return both noun and verb entries
+        mock_noun_results = [
+            ('мати 1', {'gender': 'female', 'animacy': 'animate'}, {
+                'nom ns': 'мати',
+                'gen ns': 'матері',
             }, 'noun'),
+            ('мати 2', {'aspect': 'imperfective'}, {
+                'inf': 'мати',
+                'pres 1s': 'маю',
+            }, 'verb'),
         ]
-        with patch.object(extract, '_lcorp_search_candidates', return_value=mock_results):
-            results = extract.lookup_missing_forms(word, use_cache=True)
 
-        self.assertIsInstance(results, list)
-        self.assertTrue(any(isinstance(res, tuple) or isinstance(res, list) for res in results))
+        with patch.object(extract, '_lcorp_search_candidates', return_value=mock_noun_results):
+            word = dictionary.Word('мати')
+            word.add_definition('noun', 'mother')
+            usage = word.usages['noun']
 
-        needs_inflection, new_usages = usage.add_inflection(results, source='lcorp')
-        self.assertFalse(needs_inflection)
-        self.assertTrue(usage.get_forms())
-        self.assertEqual(usage.forms_status, 'available')
-        self.assertEqual(usage.forms_source, 'lcorp')
+            results = extract.lookup_missing_forms(word)
+            self.assertIsInstance(results, list)
 
-        with open(cache_path, 'r', encoding='utf-8') as f:
-            cache = json.load(f)
-        self.assertIn('мати', cache)
+            needs_inflection, new_usages = usage.add_inflection(results, source='lcorp')
+            self.assertFalse(needs_inflection)
+            self.assertTrue(usage.get_forms())
+            self.assertEqual(usage.forms_status, 'available')
+            self.assertEqual(usage.forms_source, 'lcorp')
+
+    def test_lookup_missing_forms_verb_usage_filters_correct_entry(self):
+        import extract, dictionary
+        from unittest.mock import patch
+
+        # Mock _lcorp_search_candidates to return both noun and verb entries
+        mock_noun_results = [
+            ('мати 1', {'gender': 'female', 'animacy': 'animate'}, {
+                'nom ns': 'мати',
+                'gen ns': 'матері',
+            }, 'noun'),
+            ('мати 2', {'aspect': 'imperfective'}, {
+                'inf': 'мати',
+                'pres 1s': 'маю',
+            }, 'verb'),
+        ]
+
+        with patch.object(extract, '_lcorp_search_candidates', return_value=mock_noun_results):
+            word = dictionary.Word('мати')
+            word.add_definition('verb', 'to have')
+            usage = word.usages['verb']
+
+            results = extract.lookup_missing_forms(word)
+            self.assertIsInstance(results, list)
+
+            needs_inflection, new_usages = usage.add_inflection(results, source='lcorp')
+            self.assertFalse(needs_inflection)
+            self.assertTrue(usage.get_forms())
+            self.assertEqual(usage.forms_status, 'available')
+            self.assertEqual(usage.forms_source, 'lcorp')
 
     def test_parse_lcorp_inflection_results_detects_indeclinable(self):
         import extract

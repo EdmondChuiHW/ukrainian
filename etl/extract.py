@@ -2,6 +2,7 @@ import os
 import re
 import json
 import multiprocessing
+import threading
 import requests
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -17,7 +18,7 @@ except ImportError:
         return iterable
 
 from dictionary import Word, cyrillic
-from helpers import strip_stress
+from helpers import strip_stress, strip_suffix_number
 
 # Prefer a faster JSON parser when available, with a safe json fallback.
 try:
@@ -225,7 +226,7 @@ _wiktionary_database = None
 _wiktionary_index = None
 
 
-def _load_missing_forms_cache():
+def load_missing_forms_cache():
     try:
         with open(MISSING_FORMS_CACHE_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -233,7 +234,7 @@ def _load_missing_forms_cache():
         return {}
 
 
-def _save_missing_forms_cache(cache):
+def save_missing_forms_cache(cache):
     try:
         with open(MISSING_FORMS_CACHE_FILE, 'w', encoding='utf-8') as f:
             json.dump(cache, f, ensure_ascii=False, indent=2)
@@ -298,9 +299,8 @@ def print_lcorp_error_summary():
     print(f"  Details file: {L_CORP_ERROR_LOG_FILE}")
 
 _LCORP_URL = 'https://lcorp.ulif.org.ua/dictua/dictua.aspx'
-_lcorp_state = None
 _LCORP_INDECLINABLE_TEXT = 'незмінювана словникова одиниця'
-_LCORP_SESSION = requests.Session()
+_lcorp_thread_local = threading.local()
 
 
 def _lcorp_fetch_page(url, data=None, headers=None, timeout=30):
@@ -308,10 +308,14 @@ def _lcorp_fetch_page(url, data=None, headers=None, timeout=30):
     headers.setdefault('User-Agent', 'Mozilla/5.0 (compatible; UkrainianETL/1.0)')
     request_type = 'GET' if data is None else 'POST'
     try:
+        session = getattr(_lcorp_thread_local, 'session', None)
+        if session is None:
+            session = requests.Session()
+            _lcorp_thread_local.session = session
         if data is None:
-            response = _LCORP_SESSION.get(url, headers=headers, timeout=timeout)
+            response = session.get(url, headers=headers, timeout=timeout)
         else:
-            response = _LCORP_SESSION.post(url, data=data, headers=headers, timeout=timeout)
+            response = session.post(url, data=data, headers=headers, timeout=timeout)
         response.encoding = response.encoding or 'utf-8'
         response.raise_for_status()
         return response.text
@@ -347,22 +351,26 @@ def _lcorp_extract_hidden_input(html, name):
     return element['value'] if element and element.has_attr('value') else ''
 
 def _lcorp_get_state():
-    global _lcorp_state
-    if _lcorp_state is not None:
-        return _lcorp_state
+    state = getattr(_lcorp_thread_local, 'state', None)
+    if state is not None:
+        return state
     html = _lcorp_fetch_page(_LCORP_URL)
-    _lcorp_state = {
+    state = {
         'viewstate': _lcorp_extract_hidden_input(html, '__VIEWSTATE'),
         'viewstategenerator': _lcorp_extract_hidden_input(html, '__VIEWSTATEGENERATOR'),
         'eventvalidation': _lcorp_extract_hidden_input(html, '__EVENTVALIDATION'),
     }
-    return _lcorp_state
+    _lcorp_thread_local.state = state
+    return state
 
 
 def _extract_lcorp_tag_text(html, class_name):
     soup = BeautifulSoup(html, 'html.parser')
     element = soup.find(class_=class_name)
-    return element.get_text(strip=True) if element else None
+    if element is None:
+        return None
+    texts = [s for s in element.find_all(string=True, recursive=False)]
+    return ''.join(texts).strip()
 
 
 def _extract_lcorp_article(html):
@@ -407,6 +415,21 @@ def _parse_lcorp_word_info(text):
     return grammar
 
 
+def _clean_lcorp_result(result, word_str):
+    """Strip LCoRP prefix material (e.g. prepositions before locative) by
+    keeping only the rightmost N words of each form, where N is the number
+    of words in the search term.  Passes through None entries unchanged."""
+    if result[0] is None:
+        return result
+    found_word, word_info, forms, form_type = result
+    word_len = len(word_str.split())
+    cleaned_forms = {}
+    for k, v in (forms or {}).items():
+        cleaned_forms[k] = [' '.join(f.split()[-word_len:]) for f in v]
+    cleaned_found = ' '.join(found_word.split()[:word_len]) if found_word else found_word
+    return (cleaned_found, word_info, cleaned_forms, form_type)
+
+
 def _parse_lcorp_inflection_results(word, article_html):
     found_word = _extract_lcorp_tag_text(article_html, 'word_style')
     word_info = _extract_lcorp_tag_text(article_html, 'gram_style')
@@ -426,8 +449,8 @@ def _parse_lcorp_inflection_results(word, article_html):
             form_type = 'adj'
             forms = _parse_lcorp_adjective_rows(rows)
         elif rows[0] and rows[0][0] == 'Я':
-            form_type = 'noun'
-            forms = _parse_lcorp_pronoun(word.word)
+            word_str = word if isinstance(word, str) else word.word
+            forms = _parse_lcorp_pronoun(word_str)
     if forms is None:
         forms = {}
     if indeclinable:
@@ -442,7 +465,7 @@ def _parse_lcorp_verb_rows(rows):
     for row in rows:
         if row[0] == 'Інфінітив':
             if len(row) > 1:
-                forms['inf'] = row[1]
+                forms['inf'] = [row[1]]
         if 'Наказовий' in row[0]:
             current_tense = 'imp'
         if 'МАЙБУТНІЙ' in row[0]:
@@ -454,31 +477,31 @@ def _parse_lcorp_verb_rows(rows):
         if row[0] == '1 особа':
             if current_tense == 'imp':
                 if len(row) > 2:
-                    forms['imp 1p'] = row[2]
+                    forms['imp 1p'] = [row[2]]
             else:
                 if len(row) > 1:
-                    forms[f'{current_tense} 1s'] = row[1]
+                    forms[f'{current_tense} 1s'] = [row[1]]
                 if len(row) > 2:
-                    forms[f'{current_tense} 1p'] = row[2]
+                    forms[f'{current_tense} 1p'] = [row[2]]
         if row[0] == '2 особа':
             if len(row) > 1:
-                forms[f'{current_tense} 2s'] = row[1]
+                forms[f'{current_tense} 2s'] = [row[1]]
             if len(row) > 2:
-                forms[f'{current_tense} 2p'] = row[2]
+                forms[f'{current_tense} 2p'] = [row[2]]
         if row[0] == '3 особа':
             if len(row) > 1:
-                forms[f'{current_tense} 3s'] = row[1]
+                forms[f'{current_tense} 3s'] = [row[1]]
             if len(row) > 2:
-                forms[f'{current_tense} 3p'] = row[2]
+                forms[f'{current_tense} 3p'] = [row[2]]
         if 'чол.' in row[0]:
             if len(row) > 1:
-                forms['past ms'] = row[1]
+                forms['past ms'] = [row[1]]
             if len(row) > 2:
-                forms['past p'] = row[2]
+                forms['past p'] = [row[2]]
         if 'жін.' in row[0] and len(row) > 1:
-            forms['past fs'] = row[1]
+            forms['past fs'] = [row[1]]
         if 'сер.' in row[0] and len(row) > 1:
-            forms['past ns'] = row[1]
+            forms['past ns'] = [row[1]]
         if row[0] in ('Активний дієприкметник', 'Пасивний дієприкметник', 'Дієприслівник', 'Безособова форма'):
             last_seen_type = row[0]
         elif last_seen_type is not None:
@@ -489,7 +512,7 @@ def _parse_lcorp_verb_rows(rows):
                 'Безособова форма': 'imp pp',
             }.get(last_seen_type)
             if form_type and len(row) > 0:
-                forms[form_type] = row[0]
+                forms[form_type] = [row[0]]
     for form_id in list(forms.keys()):
         if forms[form_id] == '':
             del forms[form_id]
@@ -516,10 +539,10 @@ def _parse_lcorp_noun_rows(rows):
             case = 'voc'
         if case is not None:
             if len(row) > 2:
-                forms[f'{case} ns'] = row[1]
-                forms[f'{case} np'] = row[2]
+                forms[f'{case} ns'] = [row[1]]
+                forms[f'{case} np'] = [row[2]]
             elif len(row) > 1:
-                forms[f'{case} n'] = row[1]
+                forms[f'{case} n'] = [row[1]]
     return forms
 
 
@@ -540,9 +563,9 @@ def _parse_lcorp_adjective_rows(rows):
         if row[0] == 'місцевий':
             case = 'loc'
         if case is not None and len(row) > 1:
-            forms[f'{case} am'] = row[1]
+            forms[f'{case} am'] = [row[1]]
             if len(row) > 2:
-                forms[f'{case} an'] = row[2]
+                forms[f'{case} an'] = [row[2]]
     return forms
 
 
@@ -612,9 +635,27 @@ def _lcorp_search_candidates(word):
         return [[None, None, None, None]]
     anchor_texts = [a.get_text(strip=True) for a in table.find_all('a')]
     normalized_target = strip_stress(word)
+    all_results = []
     for index, anchor in enumerate(anchor_texts):
-        if strip_stress(anchor) == normalized_target:
-            return _lcorp_fetch_candidate_results(word, index, state)
+        anchor_base = strip_suffix_number(anchor)
+        if strip_stress(anchor_base) == normalized_target:
+            results = _lcorp_fetch_candidate_results(word, index, state)
+            if not results:
+                continue
+            found_word = results[0][0]
+            if found_word:
+                found_base = strip_suffix_number(found_word)
+                if strip_stress(found_base) == normalized_target:
+                    for r in results:
+                        if r[0]:
+                            r = list(r)
+                            r[0] = strip_suffix_number(r[0])
+                            all_results.append(tuple(r))
+                        else:
+                            all_results.append(r)
+
+    if all_results:
+        return all_results
 
     _record_lcorp_error(
         word=word,
@@ -658,7 +699,7 @@ def _lcorp_fetch_candidate_results(word, index, state):
     return _parse_lcorp_inflection_results(word, article)
 
 
-def _fetch_lcorp_inflection(word, use_cache=True):
+def _fetch_lcorp_inflection(word):
     try:
         return _lcorp_search_candidates(word.word)
     except Exception as exc:
@@ -672,20 +713,38 @@ def _fetch_lcorp_inflection(word, use_cache=True):
         return None
 
 
-def lookup_missing_forms(word, use_cache=True):
-    cache = _load_missing_forms_cache() if use_cache else {}
+def _base_lookup_missing_forms(word, cache=None, pos=None):
+    """Fetch or retrieve from cache, storing results as close to the webpage
+    as possible (with any LCoRP prefix material still present)."""
     key = strip_stress(word.word)
+    if pos:
+        key = f"{key}\x00{pos}"
 
-    if use_cache and key in cache:
+    if cache is None:
+        cache = {}
+
+    if key in cache:
         return cache[key]
 
-    results = _fetch_lcorp_inflection(word, use_cache=use_cache)
-    if not results or all(r[0] is None for r in results):
-        results = [[None, None, None, None]]
-    if use_cache:
-        cache[key] = results
-        _save_missing_forms_cache(cache)
+    results = _fetch_lcorp_inflection(word)
+    if results and not all(r[0] is None for r in results):
+        if pos:
+            results = [r for r in results if r[3] == pos or r[3] == 'indeclinable']
+        if results:
+            cache[key] = results
+            return results
+
+    results = [[None, None, None, None]]
+    cache[key] = results
     return results
+
+
+def lookup_missing_forms(word, cache=None, pos=None):
+    """Like _base_lookup_missing_forms but strips LCoRP prefix material
+    (e.g. prepositions before locative forms) from every result before
+    returning."""
+    results = _base_lookup_missing_forms(word, cache=cache, pos=pos)
+    return [_clean_lcorp_result(r, word.word) for r in results]
 
 
 def _build_wiktionary_index(words):
@@ -1147,7 +1206,7 @@ def _parse_kaikki_entry(entry):
 				continue
 
 			source = f.get('source')
-			if source in ('declension', 'conjugation') and 'tags' in f:
+			if source in ('declension', 'conjugation', 'inflection') and 'tags' in f:
 				tags = f['tags']
 				if not form_val or form_val == '-':
 					continue
@@ -1297,6 +1356,10 @@ def _parse_kaikki_entry(entry):
 				if 'adverb' in tags:
 					forms_dict['addl adv'].append(form_val)
 	parsed_entries = []
+	has_indeclinable_sense = any(
+		'indeclinable' in (s.get('tags') or [])
+		for s in entry.get('senses', [])
+	)
 	for ws, ws_pos, variants in parsed_spellings:
 		entry_forms = dict(forms_dict) if forms_dict else None
 		
@@ -1329,7 +1392,7 @@ def _parse_kaikki_entry(entry):
 			'form_type': form_type,
 			'info': word_info if any(word_info.values()) else None,
 			'aspect_candidates': aspect_candidates,
-			'forms_status': 'available' if entry_forms else ('indeclinable' if any('ndecl' in name for name in template_names) else 'missing'),
+			'forms_status': 'available' if entry_forms else ('indeclinable' if has_indeclinable_sense else 'missing'),
 			'forms_source': 'wiktionary' if entry_forms else None,
 		})
 
@@ -1525,6 +1588,11 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 			w.add_info(pos, pe['info'])
 		if pe.get('form_type'):
 			w.add_forms(pos, pe.get('forms') or {}, pe['form_type'], source='wiktionary')
+		if pe.get('forms_status') and pos in w.usages:
+			usage = w.usages[pos]
+			usage.forms_status = pe['forms_status']
+			if pe.get('forms_source'):
+				usage.forms_source = pe['forms_source']
 
 	for pe in reverse_entries:
 		word_spelling = pe['word']

@@ -1,3 +1,4 @@
+import re
 import unicodedata
 from functools import lru_cache
 from typing import Optional
@@ -69,3 +70,14 @@ def strip_stress(text: Optional[str]) -> str:
     # then normalize back to NFC so decomposed letters like 'и' + breve
     # recombine into their composed forms (for example, 'й').
     return unicodedata.normalize('NFC', fixed_mixed_script)
+
+
+@lru_cache(maxsize=None)
+def strip_suffix_number(text: Optional[str]) -> str:
+    """Strip trailing homograph number (e.g. 'мати 1' -> 'мати')."""
+    if text is None:
+        return ''
+    parts = str(text).split()
+    if parts and parts[-1].isdigit():
+        return ' '.join(parts[:-1])
+    return str(text)

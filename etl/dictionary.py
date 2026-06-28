@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from helpers import strip_stress
+from helpers import strip_stress, strip_suffix_number
 
 try:
     from tqdm import tqdm
@@ -307,6 +307,8 @@ class Usage:
 			self.delete_me = False
 			return False, []
 		for found_word, word_info, forms, form_type in results:
+			if found_word:
+				found_word = strip_suffix_number(found_word)
 			if form_type == 'indeclinable' and found_word and self._word_matches(found_word):
 				if word_info:
 					self.add_info(word_info)
@@ -356,7 +358,7 @@ class Usage:
 						added_flag = True
 						self.delete_me = False
 			elif force:
-				if self.word == found_word:
+				if found_word and self.word == found_word:
 					if self.pos in ('noun', 'verb', 'adjective') and self.pos != form_type:
 						new_usage = Usage(self.word, form_type)
 						new_usage.definitions = deepcopy(self.definitions)
@@ -835,14 +837,17 @@ class Dictionary:
 		if not to_fetch:
 			return
 
+		cache = extract.load_missing_forms_cache()
 		def fetch_missing(pair):
 			word, usage = pair
-			results = extract.lookup_missing_forms(word, use_cache=True)
+			results = extract.lookup_missing_forms(word, cache=cache, pos=usage.pos)
 			return word, usage, results
 
 		with concurrent.futures.ThreadPoolExecutor() as executor:
 			print(f"Using {executor._max_workers} workers to fetch missing forms")
 			fetched_results = list(tqdm(executor.map(fetch_missing, to_fetch), desc='fetching missing forms', unit='word', total=len(to_fetch), disable=not os.isatty(1)))
+
+		extract.save_missing_forms_cache(cache)
 
 		for word, usage, results in fetched_results:
 			_, new_usages = usage.add_inflection(results, source='lcorp')
