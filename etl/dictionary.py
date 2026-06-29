@@ -253,7 +253,11 @@ class Usage:
 
 	def _word_info_matches_pos(self, word_info, form_type):
 		"""Check if inflection form_type is applicable to this usage's POS."""
-		return self.pos == form_type
+		# LCoRP stores pronoun paradigms (including reflexive pronouns like
+		# себе́) in noun-style tables, returning form_type='noun'. Accept
+		# that for pronoun usages so reflexives get LCoRP forms after
+		# Kaikki drops their personal-pronoun table entries.
+		return self.pos == form_type or (self.pos == 'pronoun' and form_type == 'noun')
 
 	def _word_matches(self, found_word):
 		return found_word and (

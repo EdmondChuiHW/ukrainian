@@ -729,7 +729,10 @@ def _base_lookup_missing_forms(word, cache=None, pos=None):
     results = _fetch_lcorp_inflection(word)
     if results and not all(r[0] is None for r in results):
         if pos:
-            results = [r for r in results if r[3] == pos or r[3] == 'indeclinable']
+            # LCoRP has no dedicated pronoun inflection parser; pronoun tables
+            # (including reflexive pronouns like себе́) use the noun table format
+            # and return form_type='noun'. Accept that for pronoun lookups.
+            results = [r for r in results if r[3] == pos or r[3] == 'indeclinable' or (pos == 'pronoun' and r[3] == 'noun')]
         if results:
             cache[key] = results
             return results
@@ -1380,6 +1383,21 @@ def _parse_kaikki_entry(entry):
 					filtered_values = [fv for fv, pk in pronoun_form_persons[form_key] if pk in target_person_keys]
 					if filtered_values:
 						filtered_forms[form_key] = filtered_values
+				entry_forms = filtered_forms if filtered_forms else None
+			else:
+				# The word isn't a personal pronoun form (e.g. reflexive pronoun себе́).
+				# Kaikki stores the full personal-pronoun declension table under these
+				# entries, but reflexive pronouns don't have person distinctions.
+				# Drop all person-specific forms, leaving only general case forms
+				# (usually just the reflexive forms like себе́, собі́, собо́ю).
+				# If none survive, forms_status='missing' triggers a LCoRP lookup,
+				# which returns the correct reflexive paradigm.
+				filtered_forms = {}
+				person_vals = {fv for pairs in pronoun_form_persons.values() for fv, pk in pairs}
+				for form_key, form_values in entry_forms.items():
+					non_person_vals = [fv for fv in form_values if fv not in person_vals]
+					if non_person_vals:
+						filtered_forms[form_key] = non_person_vals
 				entry_forms = filtered_forms if filtered_forms else None
 
 		parsed_entries.append({

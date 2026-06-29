@@ -13,10 +13,7 @@ interface FormCellProps {
 
 export const FormCell: React.FC<FormCellProps> = (props) => {
   const { value, tooltip, colSpan } = props;
-  const isEmptyArray = Array.isArray(value) && value.length === 0;
-  const isEmptyString = typeof value === 'string' && !value.trim();
-
-  if (isEmptyArray || isEmptyString) {
+  if (isEmpty(value)) {
     return (
       <td
         data-tooltip-id="table-cell-tooltip"
@@ -30,6 +27,21 @@ export const FormCell: React.FC<FormCellProps> = (props) => {
 
   return <NonEmptyFormCell {...props} />;
 };
+
+function isEmpty(value: unknown) {
+  const isEmptyArray = Array.isArray(value) && value.length === 0;
+  if (isEmptyArray) return true;
+
+  const isEmptyStringFn = (v: unknown) => typeof v === 'string' && !v.trim();
+
+  const isEmptyString = isEmptyStringFn(value);
+  if (isEmptyString) return true;
+
+  const isAllEmptyArray = Array.isArray(value) && value.every(isEmptyStringFn);
+  if (isAllEmptyArray) return true;
+
+  return false;
+}
 
 export const NonEmptyFormCell: React.FC<FormCellProps> = ({
   value,
