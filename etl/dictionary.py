@@ -194,7 +194,10 @@ class Usage:
 						alert_info = self.alerted_definitions.get(dd)
 						metadata = alert_info if isinstance(alert_info, dict) else None
 						relations = set(metadata.get('relations', [])) if metadata else set()
-						if 'form_of' in relations:
+						# Only remove pure form_of entries (e.g. inflections like кращі → кращий).
+						# Preserve entries with additional relations (e.g. comparative + form_of
+						# like кращий → красивий), since they carry standalone meaning.
+						if relations == {'form_of'}:
 							self.definitions.pop(dd, None)
 							self.alerted_definitions.pop(dd, None)
 							self.def_prefixes.pop(dd, None)

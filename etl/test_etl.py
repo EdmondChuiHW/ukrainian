@@ -1071,6 +1071,56 @@ class TestUkrainianETL(unittest.TestCase):
         result = usage.get_dict()
         self.assertEqual(result['defs'], ['abbreviation of Петро'])
 
+    def test_clean_alerted_words_preserves_form_of_with_additional_relations(self):
+        import dictionary
+
+        lemma = dictionary.Word('краси́вий')
+        lemma.add_definition('adjective', 'beautiful')
+        lemma.add_forms('adjective', {'addl comp': ['кра́щий']}, 'adj', source='test')
+
+        usage = dictionary.Usage('кра́щий', 'adjective')
+        metadata = {
+            'relations': ['form_of', 'comparative'],
+            'targets': ['краси́вий'],
+            'tags': ['comparative', 'form-of']
+        }
+        usage.add_definition('comparative degree of краси́вий (krasývyj)', alert=metadata)
+
+        d = dictionary.Dictionary(
+            kaikki_path=os.environ['KAIKKI_PATH'],
+            frequency_csv_path=os.environ['FREQUENCY_CSV_PATH']
+        )
+        d.dict[lemma.word] = lemma
+        d.accentless_words[lemma.get_word_no_accent()].add(lemma.word)
+
+        usage.clean_alerted_words(d)
+        self.assertEqual(usage.get_definitions(), ['comparative degree of краси́вий (krasývyj)'])
+
+    def test_clean_alerted_words_removes_pure_form_of_when_resolved(self):
+        import dictionary
+
+        lemma = dictionary.Word('кра́щий')
+        lemma.add_definition('adjective', 'better')
+        lemma.add_forms('adjective', {'nom ap': ['кра́щі']}, 'adj', source='test')
+
+        usage = dictionary.Usage('кра́щі', 'adjective')
+        metadata = {
+            'relations': ['form_of'],
+            'targets': ['кра́щий'],
+            'tags': ['form-of', 'nominative', 'plural']
+        }
+        usage.add_definition('nominative plural of кра́щий (kráščyj)', alert=metadata)
+
+        d = dictionary.Dictionary(
+            kaikki_path=os.environ['KAIKKI_PATH'],
+            frequency_csv_path=os.environ['FREQUENCY_CSV_PATH']
+        )
+        d.dict[lemma.word] = lemma
+        d.accentless_words[lemma.get_word_no_accent()].add(lemma.word)
+
+        usage.clean_alerted_words(d)
+        self.assertEqual(usage.get_definitions(), [])
+
     def test_parse_kaikki_entry_variant_relation_metadata(self):
         import extract
 
