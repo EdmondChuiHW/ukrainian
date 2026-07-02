@@ -126,6 +126,7 @@ class Usage:
 		self.forms_status = 'missing'
 		self.forms_source = None
 		self.delete_me = False
+		self.sounds = []
 
 	def add_definitions(self, definitions):
 		for d in definitions:
@@ -293,6 +294,12 @@ class Usage:
 		for syn in synonyms or []:
 			if syn not in self.synonyms:
 				self.synonyms.append(syn)
+
+	def add_sounds(self, sounds):
+		if sounds:
+			for s in sounds:
+				if s not in self.sounds:
+					self.sounds.append(s)
 
 	def add_frequency(self, frequency):
 		self.frequency = frequency
@@ -515,6 +522,8 @@ class Usage:
 		if self.reverse_translation or other.reverse_translation:
 			self.reverse_translation = True
 			self.reverse_translation_source_word = self.reverse_translation_source_word or other.reverse_translation_source_word
+		# Merge sounds
+		self.add_sounds(other.sounds)
 		# Merge prefixes
 		for def_str, prefix in other.def_prefixes.items():
 			if def_str not in self.def_prefixes:
@@ -559,6 +568,8 @@ class Usage:
 		# Only include def_prefixes if there are any non-None values
 		if any(p is not None for p in prefixes):
 			result['def_prefixes'] = prefixes
+		if self.sounds:
+			result['sounds'] = self.sounds
 		return result
 
 
@@ -720,6 +731,11 @@ class Word:
 		pos = Word.normalize_pos(pos)
 		if pos in self.usages:
 			self.usages[pos].add_info(word_info)
+
+	def add_sounds(self, pos, sounds):
+		pos = Word.normalize_pos(pos)
+		if pos in self.usages:
+			self.usages[pos].add_sounds(sounds)
 
 	def add_forms(self, pos, forms, form_type, *, source):
 		pos = Word.normalize_pos(pos)

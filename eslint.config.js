@@ -34,6 +34,7 @@ export default defineConfig([
         'error',
         {
           ignoreVoidOperator: true,
+          ignoreArrowShorthand: true,
         },
       ],
       '@typescript-eslint/no-meaningless-void-operator': ['off'],

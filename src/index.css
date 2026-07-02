@@ -261,7 +261,7 @@ ol {
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: start;
-  column-gap: 0.8rem;
+  column-gap: 0.5rem;
   row-gap: 0.5rem;
   margin-bottom: 0.5rem;
 }
@@ -273,7 +273,7 @@ ol {
   line-height: 1;
 }
 
-.title + .subtitle {
+.title ~ .subtitle {
   margin: 0;
   color: var(--muted);
   font-size: 1.05rem;
@@ -394,6 +394,70 @@ ol {
   display: flex;
   justify-content: center;
   padding: 1rem 0;
+}
+
+.pronunciation {
+  color: var(--muted);
+  white-space: nowrap;
+  display: flex;
+  justify-content: center;
+  align-self: center;
+}
+
+.pronunciation-play {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-strong);
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  line-height: 0;
+  vertical-align: middle;
+
+  padding: 0;
+  /* centering `▶` be like */
+  padding-top: 1px;
+  padding-left: 2px;
+}
+
+.pronunciation-play:hover:not(:disabled) {
+  background: var(--accent-light);
+  color: var(--surface-strong);
+  text-decoration-line: none;
+}
+
+.pronunciation-play--active {
+  background: var(--accent-strong);
+  color: black;
+  text-decoration-line: none;
+  font-weight: bold;
+  font-size: 0.8rem;
+
+  /* centering `⋯` be like */
+  padding-left: 0;
+  padding-top: 1px;
+
+  &:hover {
+    text-decoration-line: none;
+  }
+}
+
+.pronunciation-play--missing {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pronunciation-play:disabled {
+  cursor: progress;
+}
+
+#pronunciation-tooltip {
+  z-index: 20;
 }
 
 ::highlight(stress) {

@@ -17,6 +17,12 @@ export interface GrammarInfo {
 
 export type FormStatus = 'missing' | 'indeclinable' | 'available';
 
+export interface SoundEntry {
+  ipa?: string;
+  ogg_url?: string;
+  mp3_url?: string;
+}
+
 export interface RawDictionaryEntry {
   word: string;
   pos: string;
@@ -35,6 +41,7 @@ export interface RawDictionaryEntry {
   counterparts?: number[];
   reverse_translation?: boolean;
   reverse_translation_source_word?: string;
+  sounds?: SoundEntry[];
 }
 
 export interface DictionaryEntry extends RawDictionaryEntry {

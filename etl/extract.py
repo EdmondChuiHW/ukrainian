@@ -1358,6 +1358,18 @@ def _parse_kaikki_entry(entry):
 					forms_dict['addl arg'].append(form_val)
 				if 'adverb' in tags:
 					forms_dict['addl adv'].append(form_val)
+	sounds = []
+	for s in entry.get('sounds', []):
+		sound_entry = {}
+		if s.get('ipa'):
+			sound_entry['ipa'] = s['ipa']
+		if s.get('mp3_url'):
+			sound_entry['mp3_url'] = s['mp3_url']
+		elif s.get('ogg_url'):
+			sound_entry['ogg_url'] = s['ogg_url']
+		if sound_entry:
+			sounds.append(sound_entry)
+
 	parsed_entries = []
 	has_indeclinable_sense = any(
 		'indeclinable' in (s.get('tags') or [])
@@ -1406,6 +1418,7 @@ def _parse_kaikki_entry(entry):
 			'variants': variants or None,
 			'definitions': definitions,
 			'synonyms': entry_synonyms or None,
+			'sounds': sounds or None,
 			'forms': entry_forms,
 			'form_type': form_type,
 			'info': word_info if any(word_info.values()) else None,
@@ -1606,6 +1619,8 @@ def load_wiktionary_jsonl(kaikki_path, return_aspect_candidates=False):
 			w.add_info(pos, pe['info'])
 		if pe.get('form_type'):
 			w.add_forms(pos, pe.get('forms') or {}, pe['form_type'], source='wiktionary')
+		if pe.get('sounds'):
+			w.add_sounds(pos, pe['sounds'])
 		if pe.get('forms_status') and pos in w.usages:
 			usage = w.usages[pos]
 			usage.forms_status = pe['forms_status']

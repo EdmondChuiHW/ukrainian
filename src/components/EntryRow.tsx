@@ -4,6 +4,7 @@ import AspectCounterpartLinks from './AspectCounterpartLinks';
 import FormsTable from './FormsTable';
 import type { DictionaryEntry } from '../types/words';
 import { SynonymLinks } from './SynonymLinks';
+import Pronunciation from './Pronunciation';
 
 interface EntryRowProps {
   entry: DictionaryEntry;
@@ -193,7 +194,6 @@ export const EntryRow: React.FC<EntryRowProps> = ({
     <article className="row">
       <div className="col entry-word-column">
         <div className="title-container">
-          {entry.index}
           <h2 className="title">
             <MatchAndStressText text={entry.word} matchTerm={query} />
             {entry.variants?.map((v) => (
@@ -203,6 +203,7 @@ export const EntryRow: React.FC<EntryRowProps> = ({
               </Fragment>
             ))}
           </h2>
+          {entry.sounds && <Pronunciation sounds={entry.sounds} />}
           <span className="subtitle">
             {entry.pos}
             {grammarDisplay && ` (${grammarDisplay})`}
