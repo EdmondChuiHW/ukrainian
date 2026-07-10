@@ -304,15 +304,18 @@ export const App: React.FC = () => {
           {!loading &&
             !error &&
             displayedEntries.map((entry) => (
-              <EntryRow
-                key={entry.index}
-                entry={entry}
-                words={words}
-                // highlight the original search term, not the normalized one
-                query={q}
-                // eslint-disable-next-line @typescript-eslint/no-misused-promises
-                onSelectWord={setQuery}
-              />
+              <>
+                <EntryRow
+                  key={entry.index}
+                  entry={entry}
+                  words={words}
+                  // highlight the original search term, not the normalized one
+                  query={q}
+                  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+                  onSelectWord={setQuery}
+                />
+                <hr />
+              </>
             ))}
 
           {!loading && !error && sortedWords.length === 0 && (
