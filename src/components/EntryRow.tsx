@@ -1,4 +1,4 @@
-import React, { Fragment } from 'react';
+import React, { Fragment, useEffect, useState } from 'react';
 import MatchAndStressText from './MatchAndStressText';
 import AspectCounterpartLinks from './AspectCounterpartLinks';
 import FormsTable from './FormsTable';
@@ -156,10 +156,17 @@ const groupDefinitions = (
   return buildGroupedDefinitions(definitions);
 };
 
+// TODO listen to system dark mode changes and update the iframe URL accordingly
+const isDarkMode = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia('(prefers-color-scheme: dark)').matches;
+
 const buildWiktionaryUrl = (word: string, lang: string = 'Ukrainian') => {
   const normalizedWord = word.replaceAll('\u0301', '').trim();
+  const base = `https://en.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}`;
+  const params = isDarkMode() ? '?vectornightmode=1' : '';
   return [
-    `https://en.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}#${encodeURIComponent(lang)}`,
+    `${base}${params}#${encodeURIComponent(lang)}`,
     normalizedWord,
   ] as const;
 };
@@ -188,7 +195,16 @@ export const EntryRow: React.FC<EntryRowProps> = ({
   const [wiktionaryUrl, wiktionaryWord] = entry.reverse_translation_source_word
     ? buildWiktionaryUrl(entry.reverse_translation_source_word, 'English')
     : buildWiktionaryUrl(entry.word);
+  const [isIframeShown, setIsIframeShown] = useState(false);
+  const [isIframeLoading, setIsIframeLoading] = useState(true);
+  const iframeRef = React.useRef<HTMLIFrameElement>(null);
   const grammarDisplay = formatGrammar(entry);
+
+  useEffect(() => {
+    if (!isIframeShown) return;
+
+    iframeRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [isIframeShown]);
 
   return (
     <article className="row">
@@ -304,16 +320,54 @@ export const EntryRow: React.FC<EntryRowProps> = ({
         />
       </div>
 
-      <p className="entry-link">
-        <a
-          href={wiktionaryUrl}
-          className="wiktionary-link"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          View “{wiktionaryWord}” on Wiktionary
-        </a>
-      </p>
+      {!isIframeShown && (
+        <p className="entry-link">
+          <a
+            href={wiktionaryUrl}
+            className="wiktionary-link"
+            onClick={(e) => {
+              e.preventDefault();
+              setIsIframeShown((isShown) => !isShown);
+            }}
+          >
+            View “{wiktionaryWord}” on Wiktionary
+          </a>
+        </p>
+      )}
+      <div
+        className="wiktionary-iframe-container"
+        style={isIframeShown ? undefined : { display: 'none' }}
+      >
+        <div className="wiktionary-iframe-header" ref={iframeRef}>
+          <a
+            href={wiktionaryUrl}
+            className="wiktionary-link wiktionary-link--external"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open in new window ↗
+          </a>
+          <button
+            className="wiktionary-close-button"
+            onClick={() => setIsIframeShown(false)}
+          >
+            Close
+          </button>
+        </div>
+        <iframe
+          src={wiktionaryUrl}
+          className={`wiktionary-iframe ${isIframeLoading ? 'wiktionary-iframe--loading' : ''}`}
+          title={`Wiktionary entry of ${wiktionaryWord}`}
+          loading="lazy"
+          onError={() => setIsIframeLoading(false)}
+          onLoad={() => setIsIframeLoading(false)}
+        />
+        {isIframeLoading && (
+          <div className="wiktionary-loading-indicator">
+            <span>Loading…</span>
+          </div>
+        )}
+      </div>
     </article>
   );
 };

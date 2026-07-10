@@ -497,6 +497,68 @@ ol {
   font-size: 0.95rem;
 }
 
+.wiktionary-link--external {
+  font-size: 0.85rem;
+  vertical-align: baseline;
+}
+
+.wiktionary-iframe-container {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+
+  height: 80vh;
+
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.wiktionary-iframe-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.wiktionary-link--external,
+.wiktionary-close-button {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--accent-light);
+
+  &:hover {
+    background-color: var(--surface-strong);
+  }
+}
+
+.wiktionary-iframe {
+  border: none;
+  display: block;
+
+  flex: 1;
+}
+
+.wiktionary-iframe--loading {
+  /* lazy attr won't fire if we use display: none */
+  opacity: 0.00001;
+}
+
+.wiktionary-loading-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
 @media (max-width: 960px) {
   .main .row {
     grid-template-columns: minmax(0, 1fr);
