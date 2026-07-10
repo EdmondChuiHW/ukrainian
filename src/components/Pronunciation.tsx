@@ -43,11 +43,12 @@ const Pronunciation: React.FC<PronunciationProps> = ({ sounds }) => {
     };
   }, []);
 
-  const tooltip = hasAudio
-    ? ipa
-      ? `Play ${ipa}`
-      : 'Play'
-    : 'No audio available';
+  const tooltip = (() => {
+    if (!ipa && !hasAudio) return 'No pronunciation available';
+    if (!hasAudio) return `${ipa} (no audio)`;
+    if (!ipa) return 'Play';
+    return `Play ${ipa}`;
+  })();
 
   return (
     <span className="pronunciation">
