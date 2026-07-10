@@ -257,14 +257,14 @@ export const App: React.FC = () => {
     <>
       <title>{`${normalizedQuery ? `${normalizedQuery} | ` : ''}Ukrainian Dictionary`}</title>
       <header className="topbar">
-        <p className="brand__title">
+        <div className="brand__title">
           <div className="brand__title-line brand__title-line--blue">
             Ukrainian
           </div>
           <div className="brand__title-line brand__title-line--yellow">
             Dictionary
           </div>
-        </p>
+        </div>
 
         <SearchBar />
       </header>
@@ -363,10 +363,6 @@ export const App: React.FC = () => {
             )}
         </section>
       </main>
-
-      <footer className="bottom-bar">
-        <p></p>
-      </footer>
     </>
   );
 };
