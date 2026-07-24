@@ -1412,13 +1412,14 @@ def _parse_kaikki_entry(entry):
 						filtered_forms[form_key] = non_person_vals
 				entry_forms = filtered_forms if filtered_forms else None
 
+		entry_sounds = sounds if strip_stress(ws) == strip_stress(word_spelling) else None
 		parsed_entries.append({
 			'word': ws,
 			'pos': ws_pos,
 			'variants': variants or None,
 			'definitions': definitions,
 			'synonyms': entry_synonyms or None,
-			'sounds': sounds or None,
+			'sounds': entry_sounds or None,
 			'forms': entry_forms,
 			'form_type': form_type,
 			'info': word_info if any(word_info.values()) else None,

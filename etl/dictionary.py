@@ -522,8 +522,6 @@ class Usage:
 		if self.reverse_translation or other.reverse_translation:
 			self.reverse_translation = True
 			self.reverse_translation_source_word = self.reverse_translation_source_word or other.reverse_translation_source_word
-		# Merge sounds
-		self.add_sounds(other.sounds)
 		# Merge prefixes
 		for def_str, prefix in other.def_prefixes.items():
 			if def_str not in self.def_prefixes:
