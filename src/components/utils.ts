@@ -5,6 +5,14 @@ export const ACCENT_MARK = '\u0301';
 export const isFormValue = (value: unknown): value is FormValue =>
   typeof value === 'string' || Array.isArray(value);
 
+export const hasFormValue = (v: unknown): boolean => {
+  if (v == null) return false;
+  if (typeof v === 'string') return v.trim().length > 0;
+  if (Array.isArray(v))
+    return v.length > 0 && v.some((s) => typeof s === 'string' && s.trim().length > 0);
+  return false;
+};
+
 export const normalizeText = (text: string = '') => {
   return text
     .toLowerCase()

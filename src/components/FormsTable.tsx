@@ -1,7 +1,12 @@
 import React from 'react';
-import SimpleNounTable from './SimpleNounTable';
-import NounTable from './NounTable';
-import AdjectiveTable from './AdjectiveTable';
+import CasesTable, {
+  NOUN_CASES,
+  ADJ_CASES,
+  SIMPLE_NOUN_COLUMNS,
+  NOUN_COLUMNS,
+  ADJ_COLUMNS,
+} from './CasesTable';
+import MatchAndStressText from './MatchAndStressText';
 import VerbTable from './VerbTable';
 import type { VerbForms } from './VerbTable';
 import GenericForms from './GenericForms';
@@ -11,7 +16,7 @@ import type {
   AdjectiveForms,
   FormStatus,
 } from '../types/words';
-import { isFormValue } from './utils';
+import { hasFormValue, humanizeKey, isFormValue } from './utils';
 import { Tooltip } from 'react-tooltip';
 
 interface FormsTableProps {
@@ -72,15 +77,65 @@ const BaseFormsTable: React.FC<FormsTableProps> = ({
   }
 
   if (isSimpleNounForms(forms)) {
-    return <SimpleNounTable forms={forms} query={query} />;
+    return (
+      <CasesTable
+        forms={forms}
+        query={query}
+        cases={NOUN_CASES}
+        columns={SIMPLE_NOUN_COLUMNS}
+      />
+    );
   }
 
   if (isNounForms(forms)) {
-    return <NounTable forms={forms} query={query} />;
+    return (
+      <CasesTable
+        forms={forms}
+        query={query}
+        cases={NOUN_CASES}
+        columns={NOUN_COLUMNS}
+      />
+    );
   }
 
   if (isAdjectiveForms(forms)) {
-    return <AdjectiveTable forms={forms} query={query} />;
+    const visibleColCount = ADJ_COLUMNS.filter(({ suffix }) =>
+      ADJ_CASES.some((c) => hasFormValue(forms[`${c.key} ${suffix}`])),
+    ).length;
+
+    return (
+      <CasesTable
+        forms={forms}
+        query={query}
+        cases={ADJ_CASES}
+        columns={ADJ_COLUMNS}
+      >
+        {forms.addl &&
+          Object.entries(forms.addl).map(([addlKey, addlValue]) => (
+            <tr key={addlKey}>
+              <th
+                scope="row"
+                className="form-cell-label"
+                data-tooltip-id="table-row-header-tooltip"
+              >
+                {humanizeKey(addlKey)}
+              </th>
+              <td colSpan={visibleColCount}>
+                {Array.isArray(addlValue) ? (
+                  addlValue.map((item: string, idx: number) => (
+                    <React.Fragment key={idx}>
+                      <MatchAndStressText text={item} matchTerm={query} />
+                      {idx < addlValue.length - 1 && <br />}
+                    </React.Fragment>
+                  ))
+                ) : (
+                  <MatchAndStressText text={addlValue} matchTerm={query} />
+                )}
+              </td>
+            </tr>
+          ))}
+      </CasesTable>
+    );
   }
 
   if (isVerbForms(forms)) {
