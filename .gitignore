@@ -20,6 +20,7 @@ lerna-debug.log*
 node_modules
 # TODO: setup proper GitHub Action
 # dist
+# docs
 dist-ssr
 *.local
 
