@@ -1,0 +1,1 @@
+The /downloaded subfolder is managed by `update_sources.py` and git-ignored.

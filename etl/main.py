@@ -11,7 +11,7 @@ def validate_environment(frequency_csv_path: str, kaikki_path: str) -> None:
     ) if not Path(path).exists()]
 
     if missing:
-        raise FileNotFoundError(f"Missing required ETL source files: {', '.join(missing)}")
+        raise FileNotFoundError(f"Missing required ETL source files: {', '.join(missing)}. You may need to run `update_sources.py`.")
     
     print (f"Environment validated. Using\nFREQUENCY_CSV_PATH={frequency_csv_path}\nKAIKKI_PATH={kaikki_path}")
 
@@ -72,7 +72,7 @@ def main(debug_words: Optional[list[str]] = None, verbose: bool = False, fetch_m
     os.makedirs(output_dir, exist_ok=True)
 
     frequency_csv_path = os.environ.get('FREQUENCY_CSV_PATH', str(source_dir / 'publicist_84k_lex_dict_orig.csv'))
-    kaikki_path = os.environ.get('KAIKKI_PATH', str(source_dir / 'kaikki.org-dictionary-combined.jsonl'))
+    kaikki_path = os.environ.get('KAIKKI_PATH', str(source_dir / 'downloaded' / 'kaikki.org-dictionary-combined.jsonl'))
     deletion_log_path = os.environ.get('DELETION_LOG_PATH', str(output_dir / 'deletions.json'))
 
     validate_environment(frequency_csv_path, kaikki_path)

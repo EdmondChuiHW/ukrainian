@@ -62,7 +62,7 @@ def concat_files(source_paths: List[Path], output_path: Path) -> None:
 
 def main() -> None:
     base_dir = Path(__file__).resolve().parent
-    sources_dir = base_dir / 'sources'
+    sources_dir = base_dir / 'sources' / 'downloaded'
     sources_dir.mkdir(parents=True, exist_ok=True)
 
     disable_progress = not sys.stdout.isatty()
