@@ -18,7 +18,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# TODO: setup proper GitHub Action
+# dist
 dist-ssr
 *.local
 
