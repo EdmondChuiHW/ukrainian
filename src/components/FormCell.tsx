@@ -8,17 +8,19 @@ interface FormCellProps {
   query: string;
   tooltip?: string;
   colSpan?: number;
+  rowSpan?: number;
   separator?: string;
 }
 
 export const FormCell: React.FC<FormCellProps> = (props) => {
-  const { value, tooltip, colSpan } = props;
+  const { value, tooltip, colSpan, rowSpan } = props;
   if (isEmpty(value)) {
     return (
       <td
         data-tooltip-id="table-cell-tooltip"
         data-tooltip-content={tooltip}
         colSpan={colSpan}
+        rowSpan={rowSpan}
       >
         <span className="empty-cell">–</span>
       </td>
@@ -48,6 +50,7 @@ export const NonEmptyFormCell: React.FC<FormCellProps> = ({
   tooltip,
   query,
   colSpan,
+  rowSpan,
   separator: separatorProp,
 }) => {
   const separator = separatorProp ?? (colSpan && colSpan > 1 ? ', ' : <br />);
@@ -60,6 +63,7 @@ export const NonEmptyFormCell: React.FC<FormCellProps> = ({
       data-tooltip-id="table-cell-tooltip"
       data-tooltip-content={tooltip}
       colSpan={colSpan}
+      rowSpan={rowSpan}
     >
       {Array.isArray(value) ? (
         value.map((item, idx) => (
