@@ -39,3 +39,6 @@ old_words.json
 old_old_words.json
 
 etl/sources/downloaded/*
+
+.vitest-attachments/*
+**/__screenshots__/**/*
