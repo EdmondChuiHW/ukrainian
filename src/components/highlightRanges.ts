@@ -20,8 +20,7 @@ export function computeStressRanges(
   const stressIndexes: [number, number][] = [];
   const normalizedChars: string[] = [];
 
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i]!;
+  for (const char of text) {
     if (char !== ACCENT_MARK) {
       normalizedChars.push(char);
       continue;
@@ -36,7 +35,7 @@ export function computeStressRanges(
     if (end === 0) continue;
 
     let start = end;
-    while (start > 0 && isCombiningMark(normalizedChars[start - 1]!)) {
+    while (start > 0 && isCombiningMark(normalizedChars[start - 1])) {
       start--;
     }
     if (start === end) {
@@ -66,7 +65,7 @@ export function computeMatchRanges(
   const matches = text.matchAll(new RegExp(RegExp.escape(noAccents), 'gi'));
 
   for (const match of matches) {
-    matchIndexes.push([match.index!, match.index! + noAccents.length]);
+    matchIndexes.push([match.index, match.index + noAccents.length]);
   }
 
   return matchIndexes;

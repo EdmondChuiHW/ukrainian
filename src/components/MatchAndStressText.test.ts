@@ -8,21 +8,16 @@ const BREVE = '\u0306';
 // Cyrillic helpers for test data clarity
 const CYR_A = '\u0430';
 const CYR_B = '\u0431';
-const CYR_YI = '\u0457';  // ї precomposed
-const CYR_I = '\u0456';   // і
-const CYR_Y = '\u0438';   // и
+const CYR_YI = '\u0457'; // ї precomposed
+const CYR_I = '\u0456'; // і
+const CYR_Y = '\u0438'; // и
 const CYR_SHORT_I = '\u0439'; // й
 
-function stress(
-  text: string,
-): [[number, number][], string] {
+function stress(text: string): [[number, number][], string] {
   return computeStressRanges(text);
 }
 
-function match(
-  text: string,
-  matchTerm?: string,
-): [number, number][] {
+function match(text: string, matchTerm?: string): [number, number][] {
   return computeMatchRanges(text, matchTerm);
 }
 
@@ -74,13 +69,16 @@ describe('useStressHighlight', () => {
     const input = `${CYR_A}${ACCENT} ${CYR_B}${ACCENT}`;
     const [indexes, text] = stress(input);
     expect(text).toBe(`${CYR_A} ${CYR_B}`);
-    expect(indexes).toEqual([[0, 1], [2, 3]]);
+    expect(indexes).toEqual([
+      [0, 1],
+      [2, 3],
+    ]);
   });
 
   it('removes whitespace before accent (bad data)', () => {
     const input = `${CYR_A} ${ACCENT}`;
     const [indexes, text] = stress(input);
-    expect(text).toBe(`${CYR_A}`);
+    expect(text).toBe(CYR_A);
     expect(indexes).toEqual([[0, 1]]);
   });
 
@@ -115,7 +113,10 @@ describe('useMatchHighlight', () => {
 
   it('finds overlapping matches', () => {
     // абаба with "ба" matches at positions 1 and 3
-    expect(match(`абаба`, `ба`)).toEqual([[1, 3], [3, 5]]);
+    expect(match(`абаба`, `ба`)).toEqual([
+      [1, 3],
+      [3, 5],
+    ]);
   });
 
   it('is case insensitive', () => {

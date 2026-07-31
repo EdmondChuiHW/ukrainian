@@ -95,6 +95,7 @@ const getVerbFormTooltip = (
 ): string | undefined => {
   if (!formKey || value == null) return undefined;
 
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   const pronoun = PRONOUN_MAP[tenseKey]?.[formKey];
   if (!pronoun) return undefined;
 

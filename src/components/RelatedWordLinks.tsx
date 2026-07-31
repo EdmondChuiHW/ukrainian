@@ -25,6 +25,7 @@ export const RelatedWordLinks: FC<RelatedWordLinksProps> = ({
   const resolveLinkItem = (item: number | string) => {
     if (typeof item === 'number') {
       const target = words[item];
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       return target
         ? { word: target.word, index: item }
         : { word: String(item), index: null };
