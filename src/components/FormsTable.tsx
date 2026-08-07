@@ -1,11 +1,5 @@
 import React from 'react';
-import CasesTable, {
-  NOUN_CASES,
-  ADJ_CASES,
-  SIMPLE_NOUN_COLUMNS,
-  NOUN_COLUMNS,
-  ADJ_COLUMNS,
-} from './CasesTable';
+import CasesTable from './CasesTable';
 import MatchAndStressText from './MatchAndStressText';
 import VerbTable from './VerbTable';
 import type { VerbForms } from './VerbTable';
@@ -18,8 +12,10 @@ import type {
 } from '../types/words';
 import { hasFormValue, humanizeKey, isFormValue } from './utils';
 import { Tooltip } from 'react-tooltip';
+import { CONFIGS } from './CasesTableConfigs';
 
 interface FormsTableProps {
+  posHint: string;
   forms?: DictionaryForms;
   forms_status: FormStatus;
   forms_source?: string;
@@ -50,7 +46,12 @@ const isNounForms = (
   );
 };
 
-const isAdjectiveForms = (forms: DictionaryForms): forms is AdjectiveForms => {
+const isAdjectiveForms = (
+  posHint: string,
+  forms: DictionaryForms,
+): forms is AdjectiveForms => {
+  if (posHint === 'adjective') return true;
+
   const keys = Object.keys(forms);
   return keys.some(
     (key) =>
@@ -59,11 +60,17 @@ const isAdjectiveForms = (forms: DictionaryForms): forms is AdjectiveForms => {
   );
 };
 
-const isVerbForms = (forms: DictionaryForms): forms is VerbForms => {
+const isVerbForms = (
+  posHint: string,
+  forms: DictionaryForms,
+): forms is VerbForms => {
+  if (posHint === 'verb') return true;
+
   return ['inf', 'pres', 'past', 'fut', 'imp'].some((key) => key in forms);
 };
 
 const BaseFormsTable: React.FC<FormsTableProps> = ({
+  posHint,
   forms,
   forms_status,
   query,
@@ -78,38 +85,23 @@ const BaseFormsTable: React.FC<FormsTableProps> = ({
 
   if (isSimpleNounForms(forms)) {
     return (
-      <CasesTable
-        forms={forms}
-        query={query}
-        cases={NOUN_CASES}
-        columns={SIMPLE_NOUN_COLUMNS}
-      />
+      <CasesTable forms={forms} query={query} config={CONFIGS.SIMPLE_NOUN} />
     );
   }
 
   if (isNounForms(forms)) {
-    return (
-      <CasesTable
-        forms={forms}
-        query={query}
-        cases={NOUN_CASES}
-        columns={NOUN_COLUMNS}
-      />
-    );
+    return <CasesTable forms={forms} query={query} config={CONFIGS.NOUN} />;
   }
 
-  if (isAdjectiveForms(forms)) {
-    const visibleColCount = ADJ_COLUMNS.filter(({ suffix }) =>
-      ADJ_CASES.some((c) => hasFormValue(forms[`${c.key} ${suffix}`])),
+  if (isAdjectiveForms(posHint, forms)) {
+    const config = CONFIGS.ADJECTIVE;
+    const { columns, cases } = config;
+    const visibleColCount = columns.filter(({ suffix }) =>
+      cases.some((c) => hasFormValue(forms[`${c.key} ${suffix}`])),
     ).length;
 
     return (
-      <CasesTable
-        forms={forms}
-        query={query}
-        cases={ADJ_CASES}
-        columns={ADJ_COLUMNS}
-      >
+      <CasesTable forms={forms} query={query} config={config}>
         {forms.addl &&
           Object.entries(forms.addl).map(([addlKey, addlValue]) => (
             <tr key={addlKey}>
@@ -138,7 +130,7 @@ const BaseFormsTable: React.FC<FormsTableProps> = ({
     );
   }
 
-  if (isVerbForms(forms)) {
+  if (isVerbForms(posHint, forms)) {
     return (
       <VerbTable
         forms={forms}
@@ -152,20 +144,12 @@ const BaseFormsTable: React.FC<FormsTableProps> = ({
 };
 
 export const FormsTable: React.FC<FormsTableProps> = ({
-  forms,
-  forms_status,
   forms_source,
-  query,
-  showComplexFutureForms,
+  ...rest
 }) => {
   return (
     <>
-      <BaseFormsTable
-        forms={forms}
-        forms_status={forms_status}
-        query={query}
-        showComplexFutureForms={showComplexFutureForms}
-      />
+      <BaseFormsTable {...rest} />
       {forms_source ? (
         <p className="forms-source">Forms source: {forms_source}</p>
       ) : null}

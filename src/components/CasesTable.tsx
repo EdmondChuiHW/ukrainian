@@ -2,64 +2,12 @@ import React from 'react';
 import FormCell from './FormCell';
 import { hasFormValue, isFormValue } from './utils';
 import type { DictionaryForms } from '../types/words';
-
-interface Column {
-  suffix: string;
-  label: string;
-  tooltip: string;
-}
-
-interface CaseRow {
-  key: string;
-  label: string;
-  tooltip: string;
-}
-
-const c = (key: string, label: string, tooltip: string): CaseRow => ({
-  key,
-  label,
-  tooltip,
-});
-
-const NOUN_CASES: CaseRow[] = [
-  c('nom', 'Nom.', 'Nominative/Називний — what/who?'),
-  c('acc', 'Acc.', 'Accusative/Знахідний — what/whom?'),
-  c('gen', 'Gen.', 'Genitive/Родовий — of what/whom?'),
-  c('dat', 'Dat.', 'Dative/Давальний — to/for what/whom?'),
-  c('ins', 'Ins.', 'Instrumental/Орудний — by/with what/whom?'),
-  c('loc', 'Loc.', 'Locative/Місцевий — in/on what/whom?'),
-  c('voc', 'Voc.', 'Vocative/Кличний — direct address'),
-];
-
-const ADJ_CASES: CaseRow[] = NOUN_CASES.filter(({ key }) => key !== 'voc');
-
-const SIMPLE_NOUN_COLUMNS: Column[] = [{ suffix: 'n', label: '', tooltip: '' }];
-
-const NOUN_COLUMNS: Column[] = [
-  { suffix: 'ns', label: 'Sing.', tooltip: 'Singular/Однина' },
-  { suffix: 'np', label: 'Plur.', tooltip: 'Plural/Множина' },
-];
-
-const ADJ_COLUMNS: Column[] = [
-  { suffix: 'am', label: 'Male', tooltip: 'Male/Чоловічий' },
-  { suffix: 'an', label: 'Neut.', tooltip: 'Neuter/Середній' },
-  { suffix: 'af', label: 'Fem.', tooltip: 'Female/Жіночий' },
-  { suffix: 'ap', label: 'Plur.', tooltip: 'Plural/Множина' },
-];
-
-export {
-  NOUN_CASES,
-  ADJ_CASES,
-  SIMPLE_NOUN_COLUMNS,
-  NOUN_COLUMNS,
-  ADJ_COLUMNS,
-};
+import type { CasesTableConfig } from './CasesTableConfigs';
 
 interface CasesTableProps {
   forms: DictionaryForms;
   query: string;
-  cases: CaseRow[];
-  columns: Column[];
+  config: CasesTableConfig;
   children?: React.ReactNode;
 }
 
@@ -83,19 +31,18 @@ function valuesAreEqual(val1: unknown, val2: unknown): boolean {
 export const CasesTable: React.FC<CasesTableProps> = ({
   forms,
   query,
-  cases,
-  columns,
+  config,
   children,
 }) => {
+  const { columns, cases } = config;
   const visibleColumns = columns.filter(({ suffix }) =>
     cases.some((c) => hasFormValue(forms[`${c.key} ${suffix}`])),
   );
 
   const showHeader = visibleColumns.some((col) => col.label);
 
-  const isAdjectiveTable = columns === ADJ_COLUMNS;
-  const isNounTable =
-    columns === NOUN_COLUMNS || columns === SIMPLE_NOUN_COLUMNS;
+  const isAdjectiveTable = config.type === 'adjective';
+  const isNounTable = config.type === 'noun' || config.type === 'simpleNoun';
 
   const rowSpanMap: Map<string, number> = new Map();
   const skipCells: Set<string> = new Set();

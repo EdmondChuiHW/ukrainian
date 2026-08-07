@@ -313,6 +313,7 @@ export const EntryRow: React.FC<EntryRowProps> = ({
 
       <div className="col entry-forms-column">
         <FormsTable
+          posHint={entry.pos}
           forms={entry.forms}
           forms_status={entry.forms_status}
           forms_source={entry.forms_source}

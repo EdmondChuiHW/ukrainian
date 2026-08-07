@@ -1,16 +1,10 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { describe, it, expect } from 'vitest';
 import { render } from 'vitest-browser-react';
-import {
-  CasesTable,
-  NOUN_CASES,
-  ADJ_CASES,
-  NOUN_COLUMNS,
-  SIMPLE_NOUN_COLUMNS,
-  ADJ_COLUMNS,
-} from './CasesTable';
+import { CasesTable } from './CasesTable';
 import { VerbTable } from './VerbTable';
 import type { DictionaryForms } from '../types/words';
+import { CONFIGS } from './CasesTableConfigs';
 
 function getCaseCells(
   container: HTMLElement,
@@ -48,12 +42,7 @@ describe('Noun cell merging (rowSpan across cases)', () => {
       'voc np': 'будинки',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={NOUN_CASES}
-        columns={NOUN_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.NOUN} />,
     );
 
     await expect
@@ -86,12 +75,7 @@ describe('Noun cell merging (rowSpan across cases)', () => {
       'voc np': 'коти',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={NOUN_CASES}
-        columns={NOUN_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.NOUN} />,
     );
 
     await expect
@@ -127,12 +111,7 @@ describe('Noun cell merging (rowSpan across cases)', () => {
       'voc np': 'слова',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={NOUN_CASES}
-        columns={NOUN_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.NOUN} />,
     );
 
     await expect
@@ -161,12 +140,7 @@ describe('Noun cell merging (rowSpan across cases)', () => {
       'voc np': 'будинки',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={NOUN_CASES}
-        columns={NOUN_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.NOUN} />,
     );
 
     await expect
@@ -189,12 +163,7 @@ describe('Noun cell merging (rowSpan across cases)', () => {
       'voc n': 'молоко',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={NOUN_CASES}
-        columns={SIMPLE_NOUN_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.SIMPLE_NOUN} />,
     );
 
     await expect
@@ -238,12 +207,7 @@ describe('Adjective cell merging (colSpan across genders)', () => {
       'loc ap': 'нових',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={ADJ_CASES}
-        columns={ADJ_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.ADJECTIVE} />,
     );
 
     await expect
@@ -284,12 +248,7 @@ describe('Adjective cell merging (colSpan across genders)', () => {
       'loc ap': 'великих',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={ADJ_CASES}
-        columns={ADJ_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.ADJECTIVE} />,
     );
 
     await expect
@@ -329,12 +288,7 @@ describe('Adjective cell merging (colSpan across genders)', () => {
       'loc ap': 'синіх',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={ADJ_CASES}
-        columns={ADJ_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.ADJECTIVE} />,
     );
 
     await expect
@@ -375,12 +329,7 @@ describe('Adjective cell merging (colSpan across genders)', () => {
       'loc ap': 'якихось',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={ADJ_CASES}
-        columns={ADJ_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.ADJECTIVE} />,
     );
 
     await expect
@@ -421,12 +370,7 @@ describe('Adjective cell merging (colSpan across genders)', () => {
       'acc ap': 'таких',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={ADJ_CASES}
-        columns={ADJ_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.ADJECTIVE} />,
     );
 
     await expect
@@ -495,12 +439,7 @@ describe('Exact highlight is applied to merged cells', () => {
       'voc np': 'будинки',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query="будинок"
-        cases={NOUN_CASES}
-        columns={NOUN_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="будинок" config={CONFIGS.NOUN} />,
     );
 
     await expect
@@ -545,12 +484,7 @@ describe('Exact highlight is applied to merged cells', () => {
       'loc ap': 'нових',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query="новий"
-        cases={ADJ_CASES}
-        columns={ADJ_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="новий" config={CONFIGS.ADJECTIVE} />,
     );
 
     await expect
@@ -587,12 +521,7 @@ describe('Cell merging uses runtime values, not static rules', () => {
       'voc np': 'хлопці',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={NOUN_CASES}
-        columns={NOUN_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.NOUN} />,
     );
 
     await expect
@@ -632,12 +561,7 @@ describe('Cell merging uses runtime values, not static rules', () => {
       'acc ap': 'особливих',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={ADJ_CASES}
-        columns={ADJ_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.ADJECTIVE} />,
     );
 
     await expect
@@ -674,12 +598,7 @@ describe('Cell merging uses runtime values, not static rules', () => {
       'voc np': 'будинки',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={NOUN_CASES}
-        columns={NOUN_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.NOUN} />,
     );
 
     await expect
@@ -708,12 +627,7 @@ describe('Cell merging uses runtime values, not static rules', () => {
       'voc np': 'села',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={NOUN_CASES}
-        columns={NOUN_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.NOUN} />,
     );
 
     await expect
@@ -751,12 +665,7 @@ describe('Merge direction depends on part of speech', () => {
       'voc np': 'міста',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={NOUN_CASES}
-        columns={NOUN_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.NOUN} />,
     );
 
     await expect
@@ -800,12 +709,7 @@ describe('Merge direction depends on part of speech', () => {
       'loc ap': 'добрих',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={ADJ_CASES}
-        columns={ADJ_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.ADJECTIVE} />,
     );
 
     await expect
@@ -851,12 +755,7 @@ describe('Separator in merged cells', () => {
       'acc ap': 'нових',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={ADJ_CASES}
-        columns={ADJ_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.ADJECTIVE} />,
     );
 
     await expect
@@ -888,12 +787,7 @@ describe('Empty and missing forms', () => {
       'voc np': 'тексти',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={NOUN_CASES}
-        columns={NOUN_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.NOUN} />,
     );
 
     await expect
@@ -932,12 +826,7 @@ describe('Empty and missing forms', () => {
       'acc ap': 'нових',
     };
     const screen = await render(
-      <CasesTable
-        forms={forms}
-        query=""
-        cases={ADJ_CASES}
-        columns={ADJ_COLUMNS}
-      />,
+      <CasesTable forms={forms} query="" config={CONFIGS.ADJECTIVE} />,
     );
 
     await expect
